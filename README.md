@@ -72,6 +72,15 @@ After processing, data from different user groups are arranged and stored in dif
 50. ```tweet_time_interval_mean```: the mean value of the time interval between two tweets by the user
 51. ```tweet_time_interval_std```: the standard deviation of the time interval between two tweets by the user
 
+## Data Collection
+
+Currently, I am collecting institutional accounts through two methods:
+
+1. Collect users from top search results of searching college names, saved in ```/data-processing/college-official-accounts/100-schools.csv``` (data here are collected by searching US News top 100 universities and liberal arts colleges);
+2. Collect users from lists that college official accounts are on, saved in ```/data-processing/college-official-accounts/60-lists-schools-organizations.csv``` (data here are collected from manually-gathered lists in ```twitter-lists-of-schools.csv```);
+
+Both are, however, challenged by data pollution by real human users.
+
 ## ESC (Ensembles of Specialized Classifiers) Experiment One
 
 In this experiment, I utilized data from cresci-2017 that includes genuine accounts, fake followers, social spambots, and traditional spambots. I trained one RF (Random Forest) aimed to distinguish genuine accounts from bot ones first. Then, I trained one RF to distinguish between the genuine accounts and each kind of bot accounts. During classification, two RFs with a highest confidence that the input is a bot or a genuine human was recorded. The bot confidence was prioritized such that if its predicted bot probability exceeds 0.5, the input will be classified as a bot, and this confidence is used to calculated the accuracy. On the other hand, the genuine confidence was used to calculate the accuracy, while the input is classified as a human.
