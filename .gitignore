@@ -1,4 +1,4 @@
-all-data/
 data/
+all-data/
 data-processing/tmp.csv
 wine-rf.ipynb
