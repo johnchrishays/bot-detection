@@ -3,6 +3,7 @@ from datetime import datetime
 import json
 import pandas as pd
 from scipy.io import arff
+import xml.etree.ElementTree as ET
 
 from preprocess import preprocess_users, drop_and_one_hot, extract_users, COLUMNS_TO_DROP, DUMMY_COLUMNS
 
@@ -117,3 +118,55 @@ def load_emd(data_path):
 
     emd_labels = emd['is_fake'].apply(lambda x: 1 if x else 0)
     return emd, emd_labels
+
+def get_tweets_xml(path):
+    """ Get tweets from xml file. """
+    with open(path) as xmlfile:
+        tree = ET.parse(xmlfile)
+        tweets = (document.text for document in tree.getroot()[0])
+        tweets_joined = " ".join(tweets)
+        return tweets_joined
+    
+def get_labels_pan19(path):
+    """ Get labels from pan19 labels file. """
+    d = dict()
+    with open(path) as file:
+        for line in file:
+            labels = line.split(":::")
+            d[labels[0]] = 1 if labels[1] == 'bot' else 0
+    return pd.DataFrame.from_dict(d, orient='index', columns=['label'])
+
+def get_tweets_pan19(index, data_path_template):
+    d = {ind : get_tweets_xml(data_path_template.format(ind)) for ind in index}
+    return pd.DataFrame.from_dict(d, orient='index', columns=['tweets'])
+
+def load_pan19(data_path_template, labels_path):
+    labels = get_labels_pan19(labels_path)
+    tweets = get_tweets_pan19(labels.index, data_path_template)
+    return tweets, labels
+
+
+def load_cresci2017_tweets(data_path_template):
+    """ Load text data for cresci2017. """
+    # Load in data
+    folder_names = ['fake_followers', 
+    'genuine_accounts', 
+    'social_spambots_1', 
+    'social_spambots_2', 
+    'social_spambots_3', 
+    'traditional_spambots_1']
+    is_bot = [1, 0, 1, 1, 1, 1]
+    tweets = []
+    cresci2017_labels = []
+
+    for name, ib in zip(folder_names, is_bot):
+        df = pd.read_csv(data_path_template.format(name), encoding='latin-1')
+        df['text'] = df['text'].apply(lambda x: "" if isinstance(x, float) else x)
+        df_groups = df[['text', 'user_id']].groupby(['user_id'])
+        df_tweets = df_groups['text'].apply(lambda x: " ".join(x))
+        tweets.append(df_tweets)
+        print(name, len(df_tweets))
+        cresci2017_labels.extend([ib]*len(df_tweets))
+            
+    cresci2017_tweets = pd.concat(tweets)
+    return cresci2017_tweets, cresci2017_labels
