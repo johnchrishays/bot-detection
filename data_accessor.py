@@ -3,9 +3,10 @@ from datetime import datetime
 import json
 import pandas as pd
 from scipy.io import arff
+from sklearn.feature_extraction.text import CountVectorizer
 import xml.etree.ElementTree as ET
 
-from preprocess import preprocess_users, drop_and_one_hot, extract_users, COLUMNS_TO_DROP, DUMMY_COLUMNS
+from preprocess import load_json, preprocess_users, drop_and_one_hot, extract_users, COLUMNS_TO_DROP, DUMMY_COLUMNS
 
 
 def load_twibot(path, drop_extra_cols=[]):
@@ -78,6 +79,48 @@ def load_cresci2017(data_template):
     dummy_cols = DUMMY_COLUMNS + ['is_translator', 'contributors_enabled', 'notifications']
     return load_cresci(data_template, folder_names, is_bot, cols_to_drop, dummy_cols, False)
 
+
+def load_gilani_derived_bands(data_path):
+    """ 
+    Load gilani-2017 dataset of features derived in the original paper. 
+    Split into bands based on how many followers the account had. 
+    """
+    sizes = ['1k', '100k', '1M', '10M']
+
+    dfs = []
+    labels = []
+
+    for s in sizes:
+        human_path = data_path + f"humans/humans.{s}.csv"
+        bot_path = data_path + f"bots/bots.{s}.csv"
+        human_df = pd.read_csv(human_path)
+        bots_df = pd.read_csv(bot_path)
+        for band in sizes:
+            if band == s:
+                human_df[f'band_{band}'] = 1
+                bots_df[f'band_{band}'] = 1
+            else:
+                human_df[f'band_{band}'] = 0
+                bots_df[f'band_{band}'] = 0
+        combined_df = pd.concat([human_df, bots_df])
+        
+        combined_df['source_identity_list'] = combined_df['source_identity'].apply(lambda s: s[1:-1].split(sep=';'))
+        for i in range(7):
+            combined_df[f'source{i}'] = combined_df['source_identity_list'].apply(lambda x: 1 if f'{i}' in x else 0)
+        combined_df.drop(['screen_name', 'source_identity', 'source_identity_list'], axis=1, inplace=True)
+
+        labels.append(pd.Series([0]*len(human_df) + [1]*len(bots_df)))
+        dfs.append(combined_df)
+    return dfs, labels
+
+
+def load_gilani_derived_combined(data_template):
+    """ Load each of the bands from gilani-2017 and return their concatinated results. """
+    dfs, labels = load_gilani_derived_bands(data_template)
+    return pd.concat(dfs), pd.concat(labels)
+        
+
+
 def load_cresci2015(data_template):
     """ Load cresci-2015 dataset. """
     folder_names = ["elzioni2013", "TheFakeProject", "intertwitter", "twittertechnology", "fastfollowerz"]
@@ -94,6 +137,14 @@ def load_cresci2015(data_template):
     dummy_cols = [col for col in DUMMY_COLUMNS if col != 'lang']
     return load_cresci(data_template, folder_names, is_bot, cols_to_drop, dummy_cols, True)
 
+
+def load_midterm(data_path, labels_path):
+    """ Load midterm-2018 dataset. """
+    profs = load_json(data_path)
+    cols_to_drop = ['probe_timestamp', 'screen_name', 'name', 'description', 'url']
+    dummy_cols = ['lang', 'protected', 'verified', 'geo_enabled', 'profile_use_background_image', 'default_profile', 'index']
+    df, one_hot, labels = preprocess_users(profs, labels_path, 'user_id', 'user_created_at', "%a %b %d %H:%M:%S %Y", cols_to_drop, dummy_cols)
+    return df, one_hot, labels
 
 def load_caverlee(data_path):
     """ Load caverlee-2011 dataset. Since all data is numeric, no one-hot columns. """
@@ -136,14 +187,23 @@ def get_labels_pan19(path):
             d[labels[0]] = 1 if labels[1] == 'bot' else 0
     return pd.DataFrame.from_dict(d, orient='index', columns=['label'])
 
+
 def get_tweets_pan19(index, data_path_template):
+    """ Get tweets from xml, turn into dictionary from user_id to tweets. """
     d = {ind : get_tweets_xml(data_path_template.format(ind)) for ind in index}
     return pd.DataFrame.from_dict(d, orient='index', columns=['tweets'])
 
+
 def load_pan19(data_path_template, labels_path):
+    """ Load pan19 dataset and transform into work frequency across all user tweets. """
     labels = get_labels_pan19(labels_path)
     tweets = get_tweets_pan19(labels.index, data_path_template)
-    return tweets, labels
+    # Get count vectorizer df
+    pan19_cv = CountVectorizer(stop_words='english') 
+    pan19_cv_matrix = pan19_cv.fit_transform(tweets['tweets']) 
+    pan19_cv_array = pan19_cv_matrix.toarray()
+    pan19_cv_df = pd.DataFrame(pan19_cv_array, index=tweets.index, columns=pan19_cv.get_feature_names())
+    return pan19_cv_df.loc[labels.index], labels
 
 
 def load_cresci2017_tweets(data_path_template):

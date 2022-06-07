@@ -6,12 +6,14 @@ import matplotlib.ticker as mtick
 from matplotlib.ticker import MaxNLocator
 import pandas as pd
 from sklearn import tree, ensemble
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import train_test_split
 from sklearn.inspection import permutation_importance
 from sklearn.metrics import f1_score, recall_score, precision_score, accuracy_score
 from sklearn.tree import export_text
 
 from preprocess import drop_and_one_hot 
+from data_accessor import load_bot_repo_dataset
 
 def timeit(func):
     def wrapper(*args, **kwargs):
@@ -100,7 +102,7 @@ def train_test_fit_and_score(X, y, method=None, depth=3):
     """ Train test split. """
     train, test, train_labels, test_labels = train_test_split(X, y, test_size=0.2)
     clf, *_ = fit_and_score(train, train_labels, method=method, depth=depth, silent=True)
-    score(clf, test, test_labels, method=method)
+    return score(clf, test, test_labels, method=method)
 
 
 def nonnumeric(df):
@@ -135,7 +137,7 @@ def permutation_feature_importance(ax, X, y, drop_cols):
     Random forest feature importance on fitted model clf, features. Plot results on ax.
     Warning: computationally expensive, since refits model multiple times.
     """
-    processed = preprocess(X, drop_cols, [])
+    processed = drop_and_one_hot(X, drop_cols, [])
     
     rf = ensemble.RandomForestClassifier(n_estimators=100)
     clf, *_ = fit_and_score(X, y, method=rf, silent=True)
@@ -151,7 +153,7 @@ def permutation_feature_importance(ax, X, y, drop_cols):
 def plot_metrics(one_hot, labels, soa_accuracy=None, soa_precision=None, soa_recall=None):
     """ Plot accuracy, precision and recall for different numbers of features. """
     rng = range(1,6)
-    models = [fit_and_score(one_hot, labels, depth=i, silent=True) for i in rng]
+    models = [train_test_fit_and_score(one_hot, labels, depth=i, silent=True) for i in rng]
     clfs, accuracies, precisions, recalls, f1s = zip(*models)
     fig, ax = plt.subplots(figsize=(7,4))
     ax.scatter(rng, accuracies, label="Accuracy")
@@ -181,3 +183,31 @@ def calculate_accuracy(precision, recall, num_bots, num_humans):
     false_negative = num_bots - true_positive
     false_positive = num_humans - true_negative
     return (true_positive + true_negative) / total
+
+def analyze_bot_repo_dataset(one_hot, labels, k=5):
+    """
+    Compute k-fold cross validation for decision trees of depths 1-5, return scores for each.
+    """
+    return [kfold_cv(one_hot, labels, depth=i, k=k) for i in range(1,6)]
+
+def analyze_bot_repo_dataset_full(data_path, labels_path, depth=5, folds=5, soa_accuracy=None, soa_precision=None, soa_recall=None):
+    df, one_hot, labels = load_bot_repo_dataset(data_path, labels_path)
+    # Fit and score on decision tree
+    print("-------------- DECISION TREE --------------")
+    plot_metrics(one_hot, labels, soa_accuracy=soa_accuracy, soa_precision=soa_precision, soa_recall=soa_recall)
+    humans = len([lab for lab in labels if lab == 0])
+    bots = len([lab for lab in labels if lab == 1])
+    print("# humans: ", humans, "# bots", bots)
+    # Fit and score on random forest
+    print("-------------- RANDOM FOREST --------------")
+    train, test, train_labels, test_labels = train_test_split(one_hot, labels, test_size=0.3)
+    rf = ensemble.RandomForestClassifier(n_estimators=100, max_depth=3)
+    clf_sig = CalibratedClassifierCV(rf, method='sigmoid')
+    rf_scores = kfold_cv(one_hot, labels, method=clf_sig, k=5)
+    print("Random forest k-fold cv scores:", rf_scores)
+    fig, axes = plt.subplots(1,2, figsize=(15,7))
+    mdi_feature_importance(rf_clf, list(one_hot.columns), axes[0])
+    permutation_feature_importance(axes[1], df, labels, DUMMY_COLUMNS + ['is_translator', 'contributors_enabled'])
+    fig.tight_layout()
+    print("-------------- DECISION TREE: k-fold cv --------------")
+    return analyze_bot_repo_dataset(df, one_hot, labels, labels_path, k, soa_accuracy, soa_precision, soa_recall)
