@@ -1,7 +1,9 @@
 """ Utilities for accessing datasets and returning them, ready for analysis. """
 from ast import literal_eval
+import csv
 from datetime import datetime
 import json
+import os
 import pandas as pd
 import re
 from scipy.io import arff
@@ -254,6 +256,31 @@ def load_cresci2015_tweets(data_path_template):
             "fastfollowerz"]
     is_bot = [0, 0, 1, 1, 1]
     return load_cresci_tweets(data_path_template, folder_names, is_bot)
+
+
+def load_cresci_stock_tweets(profiles_data_path, labels_path, tweets_path_template):
+    """ Load tweets data from cresci_stock dataset. """
+    profiles = extract_users(profiles_data_path)
+    tweets_dict = {}
+
+    for prof in profiles:
+        screen_name = prof['screen_name']
+        user_id = prof['id']
+        tweets_path = tweets_path_template.format(screen_name)
+        if os.path.exists(tweets_path):
+            with open(tweets_path) as f:
+                tweets = " ".join((literal_eval(line['text']).decode('utf-8') for line in csv.DictReader(f)))
+                tweets_dict[user_id] = tweets
+
+    cresci_stock_tweets = pd.DataFrame.from_dict(tweets_dict, orient='index', columns=['tweets'])
+    labels = pd.read_csv(labels_path, sep="\t", header=None, names=["id", "label_str"], index_col="id")
+    labels.loc[labels['label_str']=="human", 'label'] = 0
+    labels.loc[labels['label_str']=="bot", 'label'] = 1
+    cresci_stock_tweets, labels = cresci_stock_tweets.align(labels, join="inner", axis=0)
+    cresci_stock_tweets.reset_index(inplace=True)
+    labels = labels['label']
+    cv_df = tweets_to_countvectorized_df(cresci_stock_tweets['tweets'])
+    return cv_df, pd.Series(labels)
 
 
 def process_line_yang(line):
