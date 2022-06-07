@@ -1,7 +1,9 @@
 """ Utilities for accessing datasets and returning them, ready for analysis. """
+from ast import literal_eval
 from datetime import datetime
 import json
 import pandas as pd
+import re
 from scipy.io import arff
 from sklearn.feature_extraction.text import CountVectorizer
 import xml.etree.ElementTree as ET
@@ -10,6 +12,7 @@ from preprocess import load_json, preprocess_users, drop_and_one_hot, extract_us
 
 
 def load_twibot(path, drop_extra_cols=[]):
+    """ Load twibot dataset. """
     with open(path) as f:
         twibot = json.load(f)
         twibot_labels = [int(ent['label']) for ent in twibot]
@@ -29,6 +32,7 @@ def load_twibot(path, drop_extra_cols=[]):
     return twibot_df, twibot_one_hot, twibot_labels
 
 def load_bot_repo_dataset(data_path, labels_path):
+    """ Load any dataset that comes from bot repo in standard form. """
     profs = extract_users(data_path)
     df, one_hot, labels = preprocess_users(profs, labels_path)
     return df, one_hot, labels 
@@ -118,7 +122,6 @@ def load_gilani_derived_combined(data_template):
     """ Load each of the bands from gilani-2017 and return their concatinated results. """
     dfs, labels = load_gilani_derived_bands(data_template)
     return pd.concat(dfs), pd.concat(labels)
-        
 
 
 def load_cresci2015(data_template):
@@ -185,7 +188,7 @@ def get_labels_pan19(path):
         for line in file:
             labels = line.split(":::")
             d[labels[0]] = 1 if labels[1] == 'bot' else 0
-    return pd.DataFrame.from_dict(d, orient='index', columns=['label'])
+    return pd.DataFrame.from_dict(d, orient='index', columns=['label'])['label']
 
 
 def get_tweets_pan19(index, data_path_template):
@@ -194,30 +197,28 @@ def get_tweets_pan19(index, data_path_template):
     return pd.DataFrame.from_dict(d, orient='index', columns=['tweets'])
 
 
+def tweets_to_countvectorized_df(df):
+    """
+    Input dataframe with each row a single string with all tweets collected.
+    """
+    cv = CountVectorizer(stop_words='english', min_df=10) 
+    cv_matrix = cv.fit_transform(df) 
+    cv_df = pd.DataFrame(cv_matrix.toarray(), index=df.index, columns=cv.get_feature_names())
+    return cv_df
+
 def load_pan19(data_path_template, labels_path):
     """ Load pan19 dataset and transform into work frequency across all user tweets. """
     labels = get_labels_pan19(labels_path)
     tweets = get_tweets_pan19(labels.index, data_path_template)
     # Get count vectorizer df
-    pan19_cv = CountVectorizer(stop_words='english') 
-    pan19_cv_matrix = pan19_cv.fit_transform(tweets['tweets']) 
-    pan19_cv_array = pan19_cv_matrix.toarray()
-    pan19_cv_df = pd.DataFrame(pan19_cv_array, index=tweets.index, columns=pan19_cv.get_feature_names())
+    pan19_cv_df = tweets_to_countvectorized_df(tweets['tweets'])
     return pan19_cv_df.loc[labels.index], labels
 
 
-def load_cresci2017_tweets(data_path_template):
-    """ Load text data for cresci2017. """
-    # Load in data
-    folder_names = ['fake_followers', 
-    'genuine_accounts', 
-    'social_spambots_1', 
-    'social_spambots_2', 
-    'social_spambots_3', 
-    'traditional_spambots_1']
-    is_bot = [1, 0, 1, 1, 1, 1]
+def load_cresci_tweets(data_path_template, folder_names, is_bot):
+    """ Load tweet data for cresci2017 and cresci2015. """
     tweets = []
-    cresci2017_labels = []
+    cresci_labels = []
 
     for name, ib in zip(folder_names, is_bot):
         df = pd.read_csv(data_path_template.format(name), encoding='latin-1')
@@ -225,8 +226,77 @@ def load_cresci2017_tweets(data_path_template):
         df_groups = df[['text', 'user_id']].groupby(['user_id'])
         df_tweets = df_groups['text'].apply(lambda x: " ".join(x))
         tweets.append(df_tweets)
-        print(name, len(df_tweets))
-        cresci2017_labels.extend([ib]*len(df_tweets))
+        cresci_labels.extend([ib]*len(df_tweets))
             
-    cresci2017_tweets = pd.concat(tweets)
-    return cresci2017_tweets, cresci2017_labels
+    cresci_tweets = pd.concat(tweets)
+    cresci_cv_df = tweets_to_countvectorized_df(cresci_tweets)
+    return cresci_cv_df, pd.Series(cresci_labels)
+
+
+def load_cresci2017_tweets(data_path_template):
+    """ Load text data for cresci2017. """
+    folder_names = ['fake_followers', 
+            'genuine_accounts', 
+            'social_spambots_1', 
+            'social_spambots_2', 
+            'social_spambots_3', 
+            'traditional_spambots_1']
+    is_bot = [1, 0, 1, 1, 1, 1]
+    return load_cresci_tweets(data_path_template, folder_names, is_bot)
+
+
+def load_cresci2015_tweets(data_path_template):
+    """ Load text data for cresci2015. """
+    folder_names = ["elzioni2013", 
+            "TheFakeProject", 
+            "intertwitter", 
+            "twittertechnology", 
+            "fastfollowerz"]
+    is_bot = [0, 0, 1, 1, 1]
+    return load_cresci_tweets(data_path_template, folder_names, is_bot)
+
+
+def process_line_yang(line):
+    """ Replace python2 timestamp with python3-readable int, return tuple. """
+    pattern = '([0-9]+)L'
+    timestamp = re.search(pattern, line).group(1)
+    line = re.sub(pattern, timestamp, line)
+    tup = literal_eval(line)
+    return tup
+
+
+def get_yang_datafile(data_path, col_names):
+    """ Open yang datafile and return dataframe for further processing. Either human or bot datafile. """
+    with open(data_path) as f:
+        lines = [process_line_yang(line) for line in f.readlines()]
+    return pd.DataFrame(lines, columns=col_names)
+
+
+def load_yang(data_path):
+    """ Load yang-2013 dataset. """
+    human_col_names = ["user_id", "background_url", "account creation time",  "description", "favourites_count", "followers_count", "followings_count", "geo_enabled", "location", "name", "image_url", "protected", "screen_name", "statuses_count", "timezone", "verified"]
+    bot_col_names =  human_col_names + ["language", "list_count", "bio_url"]
+    yang_humans = get_yang_datafile(data_path + "NormalData/users.txt", human_col_names)
+    yang_bots = get_yang_datafile(data_path + "MalData/users.txt", bot_col_names)
+    yang = pd.concat([yang_humans, yang_bots], join='inner')
+    labels = pd.Series([0]*len(yang_humans) + [1]*len(yang_bots))
+    yang_one_hot = drop_and_one_hot(yang, ['user_id', 'description', 'screen_name'], ['background_url', 'location', 'name', 'image_url', 'timezone'])
+    return yang, yang_one_hot, labels
+           
+
+def load_yang_tweets(data_path):
+    """ Load yang-2013 tweet data. """
+    human_col_names = ['tweet_id', 'user_id', 'tweet creation time', 'favourited', 'in_reply_to_status_id', 'in_reply_to_user_id', 'in_reply_to_screen_name', 'latitude', 'longitude', 'source', 'retweet', 'truncated', 'text']
+    bot_col_names = human_col_names + ['retweet_count', 'hash_tag', 'mention_users']
+    yang_humans = get_yang_datafile(data_path + "NormalData/tweets.txt", human_col_names)
+    yang_bots = get_yang_datafile(data_path + "MalData/tweets.txt", bot_col_names)
+    human_groups = yang_humans[['text', 'user_id']].groupby(['user_id'])
+    human_tweets = human_groups['text'].apply(lambda x: " ".join(x))
+    bot_groups = yang_bots[['text', 'user_id']].groupby(['user_id'])
+    bot_tweets = bot_groups['text'].apply(lambda x: " ".join(x))
+    df = pd.concat([human_tweets, bot_tweets], join='inner')
+    labels = pd.Series([0]*len(human_tweets) + [1]*len(bot_tweets))
+    cv_df = tweets_to_countvectorized_df(df)
+    return cv_df, pd.Series(labels)
+        
+        
