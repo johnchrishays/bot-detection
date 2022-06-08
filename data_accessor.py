@@ -203,7 +203,7 @@ def tweets_to_countvectorized_df(df):
     """
     Input dataframe with each row a single string with all tweets collected.
     """
-    cv = CountVectorizer(stop_words='english', min_df=10) 
+    cv = CountVectorizer(stop_words='english', min_df=25) 
     cv_matrix = cv.fit_transform(df) 
     cv_df = pd.DataFrame(cv_matrix.toarray(), index=df.index, columns=cv.get_feature_names())
     return cv_df
