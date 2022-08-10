@@ -17,11 +17,13 @@ from data_accessor import load_bot_repo_dataset
 
 def timeit(func):
     def wrapper(*args, **kwargs):
-        start_time = time.time()
-        print(f"Starting {func.__name__} at {start_time}")
+        if 'silent' not in kwargs or not kwargs['silent']:
+            start_time = time.time()
+            print(f"Starting {func.__name__} at {time.strftime('%D %H:%M:%S')}")
         result = func(*args, **kwargs)
-        end_time = time.time()
-        print(f"Finished {func.__name__} at {end_time}. Execution time: {end_time - start_time} s")
+        if 'silent' not in kwargs or not kwargs['silent']:
+            end_time = time.time()
+            print(f"Finished {func.__name__} at {end_time}. Execution time: {end_time - start_time} s")
         return result
     return wrapper
 
@@ -67,6 +69,7 @@ def fit_and_score(X, y, method=None, depth=3, silent=False):
     accuracy, precision, recall, f1 = score(clf, X, y, method, silent)
     return clf, accuracy, precision, recall, f1
 
+
 @timeit
 def kfold_cv(X, y, method=None, depth=3, k=5, calibrate=False, silent=True):
     """
@@ -98,11 +101,11 @@ def kfold_cv(X, y, method=None, depth=3, k=5, calibrate=False, silent=True):
     return avg_scores
     
 @timeit
-def train_test_fit_and_score(X, y, method=None, depth=3):
+def train_test_fit_and_score(X, y, method=None, depth=3, silent=False):
     """ Train test split. """
     train, test, train_labels, test_labels = train_test_split(X, y, test_size=0.2)
     clf, *_ = fit_and_score(train, train_labels, method=method, depth=depth, silent=True)
-    return score(clf, test, test_labels, method=method)
+    return score(clf, test, test_labels, method=method, silent=silent)
 
 
 def nonnumeric(df):
@@ -173,6 +176,7 @@ def plot_metrics(one_hot, labels, soa_accuracy=None, soa_precision=None, soa_rec
     ax.legend()
     plt.tight_layout()
     
+
 def calculate_accuracy(precision, recall, num_bots, num_humans):
     """
     Calculate accuracy from precision, recall and support.
@@ -184,11 +188,15 @@ def calculate_accuracy(precision, recall, num_bots, num_humans):
     false_positive = num_humans - true_negative
     return (true_positive + true_negative) / total
 
-def analyze_bot_repo_dataset(one_hot, labels, k=5):
+
+def analyze_bot_repo_dataset(one_hot, labels, k=5, silent=False, kfold=True):
     """
     Compute k-fold cross validation for decision trees of depths 1-5, return scores for each.
     """
-    return [kfold_cv(one_hot, labels, depth=i, k=k) for i in range(1,6)]
+    if kfold:
+        return [kfold_cv(one_hot, labels, depth=i, k=k) for i in range(1,6)]
+    return [train_test_fit_and_score(one_hot, labels, depth=i, silent=silent) for i in range(1,6)]
+
 
 def analyze_bot_repo_dataset_full(data_path, labels_path, depth=5, folds=5, soa_accuracy=None, soa_precision=None, soa_recall=None):
     df, one_hot, labels = load_bot_repo_dataset(data_path, labels_path)
