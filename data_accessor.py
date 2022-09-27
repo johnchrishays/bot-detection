@@ -151,13 +151,15 @@ def load_midterm(data_path, labels_path):
     df, one_hot, labels = preprocess_users(profs, labels_path, 'user_id', 'user_created_at', "%a %b %d %H:%M:%S %Y", cols_to_drop, dummy_cols)
     return df, one_hot, labels
 
-def load_caverlee(data_path):
+def load_caverlee(data_path, drop_created_at=False):
     """ Load caverlee-2011 dataset. Since all data is numeric, no one-hot columns. """
     caverlee2011_bots = pd.read_csv(data_path + "content_polluters.txt", sep="\t", header=None, names=["UserID", "CreatedAt", "CollectedAt", "NumerOfFollowings", "NumberOfFollowers", "NumberOfTweets", "LengthOfScreenName", "LengthOfDescriptionInUserProfile"])
     caverlee2011_humans = pd.read_csv(data_path + "legitimate_users.txt", sep="\t", header=None, names=["UserID", "CreatedAt", "CollectedAt", "NumerOfFollowings", "NumberOfFollowers", "NumberOfTweets", "LengthOfScreenName", "LengthOfDescriptionInUserProfile"])
     caverlee2011 = pd.concat([caverlee2011_bots, caverlee2011_humans])
     caverlee2011["CreatedAt"] = caverlee2011["CreatedAt"].apply(lambda dt: datetime.strptime(dt, "%Y-%m-%d %H:%M:%S").timestamp())
     caverlee2011.drop(columns=["CollectedAt", "UserID"], inplace=True)
+    if drop_created_at:
+        caverlee2011.drop(columns=["CreatedAt"], inplace=True)
     caverlee2011_labels = pd.Series([1]*len(caverlee2011_bots) + [0]*len(caverlee2011_humans))
     return caverlee2011, caverlee2011_labels
 

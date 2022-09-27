@@ -6,6 +6,7 @@ import matplotlib.ticker as mtick
 from matplotlib.ticker import MaxNLocator
 import pandas as pd
 from sklearn import tree, ensemble
+from sklearn.base import clone
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import train_test_split
 from sklearn.inspection import permutation_importance
@@ -36,7 +37,7 @@ def fit(X, y, method=None, depth=3):
         # Use decision tree
         clf = tree.DecisionTreeClassifier(max_depth=depth)
     else:
-        clf = method
+        clf = clone(method)
     clf = clf.fit(X, y)
     return clf
  
@@ -101,11 +102,18 @@ def kfold_cv(X, y, method=None, depth=3, k=5, calibrate=False, silent=True):
     return avg_scores
     
 @timeit
-def train_test_fit_and_score(X, y, method=None, depth=3, silent=False):
+def train_test_fit_and_score_clf(X, y, method=None, depth=3, silent=False):
     """ Train test split. """
     train, test, train_labels, test_labels = train_test_split(X, y, test_size=0.2)
     clf, *_ = fit_and_score(train, train_labels, method=method, depth=depth, silent=True)
-    return score(clf, test, test_labels, method=method, silent=silent)
+    scr = score(clf, test, test_labels, method=method, silent=silent)
+    return clf, scr
+
+
+def train_test_fit_and_score(X, y, method=None, depth=3, silent=False):
+    """ Train test split. """
+    _, scr = train_test_fit_and_score_clf(X, y, method, depth, silent)
+    return scr
 
 
 def nonnumeric(df):
