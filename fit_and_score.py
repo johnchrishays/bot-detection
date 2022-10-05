@@ -66,7 +66,7 @@ def fit_and_score(X, y, method=None, depth=3, silent=False):
     """ 
     Fit model, print out the ascii tree and scores and return the model/scores.
     """
-    clf = fit(X, y, method, depth)
+    clf =- fit(X, y, method, depth)
     accuracy, precision, recall, f1 = score(clf, X, y, method, silent)
     return clf, accuracy, precision, recall, f1
 
