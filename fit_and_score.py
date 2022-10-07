@@ -42,7 +42,7 @@ def fit(X, y, method=None, depth=3):
     return clf
  
 
-def score(clf, X, y, method=None, silent=False):
+def score(clf, X, y, method=None, silent=False, prec_rec=True):
     """
     Score trained model, and print out results if not silent.
     """
@@ -51,9 +51,14 @@ def score(clf, X, y, method=None, silent=False):
         print(r)
     accuracy = clf.score(X, y)
     preds = clf.predict(X)
-    precision = precision_score(y, preds)
-    recall = recall_score(y, preds)
-    f1 = f1_score(y, preds)
+    if prec_rec:
+        precision = precision_score(y, preds)
+        recall = recall_score(y, preds)
+        f1 = f1_score(y, preds)
+    else:
+        precision = -1
+        recall = -1
+        f1 = -1
     if (not silent):
         print(f"Accuracy:", accuracy)
         print(f"Precision", precision)
@@ -62,12 +67,12 @@ def score(clf, X, y, method=None, silent=False):
     return accuracy, precision, recall, f1
 
 
-def fit_and_score(X, y, method=None, depth=3, silent=False):
+def fit_and_score(X, y, method=None, depth=3, silent=False, prec_rec=True):
     """ 
     Fit model, print out the ascii tree and scores and return the model/scores.
     """
-    clf =- fit(X, y, method, depth)
-    accuracy, precision, recall, f1 = score(clf, X, y, method, silent)
+    clf = fit(X, y, method, depth)
+    accuracy, precision, recall, f1 = score(clf, X, y, method, silent, prec_rec)
     return clf, accuracy, precision, recall, f1
 
 
@@ -102,17 +107,17 @@ def kfold_cv(X, y, method=None, depth=3, k=5, calibrate=False, silent=True):
     return avg_scores
     
 @timeit
-def train_test_fit_and_score_clf(X, y, method=None, depth=3, silent=False):
+def train_test_fit_and_score_clf(X, y, method=None, depth=3, silent=False, prec_rec=True):
     """ Train test split. """
     train, test, train_labels, test_labels = train_test_split(X, y, test_size=0.2)
-    clf, *_ = fit_and_score(train, train_labels, method=method, depth=depth, silent=True)
-    scr = score(clf, test, test_labels, method=method, silent=silent)
+    clf, *_ = fit_and_score(train, train_labels, method=method, depth=depth, silent=True, prec_rec=prec_rec)
+    scr = score(clf, test, test_labels, method=method, silent=silent, prec_rec=prec_rec)
     return clf, scr
 
 
-def train_test_fit_and_score(X, y, method=None, depth=3, silent=False):
+def train_test_fit_and_score(X, y, method=None, depth=3, silent=False, prec_rec=True):
     """ Train test split. """
-    _, scr = train_test_fit_and_score_clf(X, y, method, depth, silent)
+    _, scr = train_test_fit_and_score_clf(X, y, method, depth, silent, prec_rec)
     return scr
 
 
