@@ -77,15 +77,25 @@ def fit_and_score(X, y, method=None, depth=3, silent=False, prec_rec=True):
 
 
 @timeit
-def kfold_cv(X, y, method=None, depth=3, k=5, calibrate=False, silent=True):
+def kfold_cv(X, y, method=None, depth=3, k=5, calibrate=False, silent=True, balance=False):
     """
     Run fit_and_score k times and compute test score statistics.
     """
-    inds = np.random.permutation(len(X))
     scores = []
-    fold_size = (len(X) // k)+1
-    shuffled_X = X.iloc[inds]
-    shuffled_y = y.iloc[inds]
+    if balance:
+        humans = X.loc[(y == 0).values]
+        bots = X.loc[(y == 1).values]
+        n_accts = min(len(humans), len(bots))
+        balanced_labels = pd.Series([0]*n_accts + [1]*n_accts)
+        balanced_X = pd.concat([humans.sample(n_accts), bots.sample(n_accts)])
+        inds = np.random.permutation(len(balanced_X))
+        shuffled_X = balanced_X.iloc[inds]
+        shuffled_y = balanced_labels.iloc[inds]
+    else:
+        inds = np.random.permutation(len(X))
+        shuffled_X = X.iloc[inds]
+        shuffled_y = y.iloc[inds]
+    fold_size = (len(shuffled_X) // k)+1
     for i in range(k):
         if not silent:
             print(f"Fold {i} in progress")
@@ -107,17 +117,25 @@ def kfold_cv(X, y, method=None, depth=3, k=5, calibrate=False, silent=True):
     return avg_scores
     
 @timeit
-def train_test_fit_and_score_clf(X, y, method=None, depth=3, silent=False, prec_rec=True):
+def train_test_fit_and_score_clf(X, y, method=None, depth=3, silent=False, prec_rec=True, balance=False):
     """ Train test split. """
-    train, test, train_labels, test_labels = train_test_split(X, y, test_size=0.2)
+    if balance:
+        X_human = X[y == 0]
+        X_bot = X[y == 1]
+        n_accts = min(len(X_human), len(X_bot))
+        balanced_X = pd.concat(X_human.sample(n_accts), X_bot.sample(n_accts))
+        balanced_y = [0] * n_accts + [1] * n_accts
+        train, test, train_labels, test_labels = train_test_split(balanced_X, balanced_y, test_size=0.2)
+    else:
+        train, test, train_labels, test_labels = train_test_split(X, y, test_size=0.2)
     clf, *_ = fit_and_score(train, train_labels, method=method, depth=depth, silent=True, prec_rec=prec_rec)
     scr = score(clf, test, test_labels, method=method, silent=silent, prec_rec=prec_rec)
     return clf, scr
 
 
-def train_test_fit_and_score(X, y, method=None, depth=3, silent=False, prec_rec=True):
+def train_test_fit_and_score(X, y, method=None, depth=3, silent=False, prec_rec=True, balance=False):
     """ Train test split. """
-    _, scr = train_test_fit_and_score_clf(X, y, method, depth, silent, prec_rec)
+    _, scr = train_test_fit_and_score_clf(X, y, method, depth, silent, prec_rec, balance)
     return scr
 
 
@@ -207,7 +225,10 @@ def analyze_bot_repo_dataset(one_hot, labels, k=5, silent=False, kfold=True):
     Compute k-fold cross validation for decision trees of depths 1-5, return scores for each.
     """
     if kfold:
-        return [kfold_cv(one_hot, labels, depth=i, k=k) for i in range(1,6)]
+        unbalanced_scores = [kfold_cv(one_hot, pd.Series(labels), depth=i, k=k, balance=False) for i in range(1,6)]
+        balanced_scores = [kfold_cv(one_hot, pd.Series(labels), depth=i, k=k, balance=True) for i in range(1,6)]
+        scores = [[u[0], u[1], u[2], u[3], b[0]] for u, b in zip(unbalanced_scores, balanced_scores)]
+        return scores 
     return [train_test_fit_and_score(one_hot, labels, depth=i, silent=silent) for i in range(1,6)]
 
 
