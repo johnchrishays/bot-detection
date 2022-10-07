@@ -190,7 +190,6 @@ def get_tweets_xml(path):
         tree = ET.parse(xmlfile)
         tweets = (document.text for document in tree.getroot()[0])
         tweets_joined = " ".join(tweets)
-        print(len(tweets))
         return tweets_joined
     
 def get_labels_pan19(path):
@@ -236,7 +235,6 @@ def load_cresci_tweets(data_path_template, folder_names, is_bot):
         df = pd.read_csv(data_path_template.format(name), encoding='latin-1')
         df['text'] = df['text'].apply(lambda x: "" if isinstance(x, float) else x)
         df_groups = df[['text', 'user_id']].groupby(['user_id'])
-        print(df_groups.size())
         df_tweets = df_groups['text'].apply(lambda x: " ".join(x))
         tweets.append(df_tweets)
         cresci_labels.extend([ib]*len(df_tweets))
