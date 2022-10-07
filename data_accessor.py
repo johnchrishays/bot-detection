@@ -2,6 +2,7 @@
 from ast import literal_eval
 import csv
 from datetime import datetime
+from functools import reduce
 import json
 import os
 import pandas as pd
@@ -40,7 +41,7 @@ def load_bot_repo_dataset(data_path, labels_path):
     return df, one_hot, labels 
 
 
-def load_cresci(data_template, folder_names, is_bot, cols_to_drop, dummy_cols, include_created_at):
+def load_cresci(data_template, folder_names, is_bot, cols_to_drop, dummy_cols, include_created_at, balance=False):
     """ Load one of the cresci datasets. """
     dfs = []
     cresci_labels = []
@@ -50,7 +51,13 @@ def load_cresci(data_template, folder_names, is_bot, cols_to_drop, dummy_cols, i
         dfs.append(df)
         cresci_labels.extend([ib]*len(df))
         
+    if balance:
+        n_accts = min(map(len, dfs))
+        dfs = [df.sample(n_accts) for df in dfs]
+        cresci_labels = list(reduce(lambda a,b: a+b, [[ib]*n_accts for ib in is_bot]))
+
     cresci = pd.concat(dfs)
+
     if include_created_at:
         cresci["created_at"] = cresci["created_at"].apply(lambda dt: datetime.strptime(dt, "%a %b %d %H:%M:%S %z %Y").timestamp())
     cresci_labels = pd.Series(cresci_labels)
