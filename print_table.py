@@ -116,21 +116,21 @@ def print_leave_one_out_table(df, random_forest=True):
 
     for row in df.to_dict(orient='records'):
         k = row['left_out']
-
+        name = process_tick_label(k)
 
         if random_forest:
-            accuracy_rf = row[f'a_rf']
-            f1_rf = row[f'f_rf']
-            balanced_accuracy_rf = [row[f'ba_rf'] for i in range(1, max_depth+1)]
+            accuracy = row[f'a_rf']
+            f1 = row[f'f_rf']
+            balanced_accuracy = [row[f'ba_rf'] for i in range(1, max_depth+1)]
+            print_row([name, f"{accuracy:0.2f}/{f1:0.2f}/f{balanced_accuracy:0.2f}"])
         else:
             accuracies = [row[f'a{i}'] for i in range(1, max_depth+1)]
             f1s = [row[f'f{i}'] for i in range(1, max_depth+1)]
-            balanced_accuracies = [row[f'ba{i}'] for i in range(1, max_depth+1)]
-            max_ind, accuracy_sdt, f1_sdt, balanced_accuracy_sdt = get_shallowest_good_results(0.025, accuracies, f1s, balanced_accuracies)
+            balanced_accuracy = [row[f'ba{i}'] for i in range(1, max_depth+1)]
+            max_ind, accuracy, f1, balanced_accuracy = get_shallowest_good_results(0.025, accuracies, f1s, balanced_accuracies)
+            print_row([name, f"{accuracy:0.2f}/{f1:0.2f}/f{balanced_accuracy:0.2f}", f"{max_ind+1}"])
 
-        name = process_tick_label(k)
 
-        print_row([name, f"{accuracy_sdt:0.2f}/{f1_sdt:0.2f}/f{balanced_accuracy_sdt:0.2f}", f"{max_ind+1}"])
 
  
 def print_totoa_matrix(train_on_one_test_on_another_performance, col_name):
