@@ -73,3 +73,68 @@ def botometer_leave_dataset_out(datasets, i):
         }
     return scores
 
+def get_score(score, dataset_name):
+    if score == "":
+        return -1
+    match = re.search(f"all: ([0-9]*(\.\d+)?)", score)
+    if match:
+        return -1
+    match = re.search(f"{dataset_name}: ([0-9]*(\.\d+)?)", score)
+    if match: 
+        return float(match.group(1))
+    return float(score)
+
+def get_max_score(df, dataset_name, metric):
+    scores = df[df['dataset(s) used'].str.contains(dataset_name)][metric].map(lambda x: get_score(x, dataset_name))
+    max_score_ind = scores.idxmax()
+    return scores.loc[max_score_ind], df.at[max_score_ind, 'bibtex_id']
+
+def print_single_dataset_score_table(score_dict):
+    max_depth = 5
+    tolerance = 0.025
+
+    for k,v in score_dict.items():
+        accuracy_sota = float(v['accuracy'][0])
+        f1_sota = float(v['f1'][0])
+        row = sdt_df[sdt_df['name'] == k].to_dict(orient="records")[0]
+        accuracies = [row[f'a{i}'] for i in range(1, max_depth+1)]
+        a_max_ind = np.argmax(accuracies)
+        f1s = [row[f'f{i}'] for i in range(1, max_depth+1)]
+        f_max_ind = np.argmax(f1s)
+        accuracy_sdt = accuracies[a_max_ind]
+        f1_sdt = f1s[f_max_ind]
+
+        for i, acc in enumerate(accuracies):
+            if accuracy_sdt - acc <= tolerance:
+                a_max_ind = i
+                accuracy_sdt = acc
+                break
+        for i, f in enumerate(f1s):
+            if f1_sdt - f <= tolerance:
+                f_max_ind = i
+                f1_sdt = f
+                break
+
+
+
+        accuracy_diff = accuracy_sdt - accuracy_sota
+        f1_diff = f1_sdt - f1_sota
+        if v['accuracy'][1] == v['f1'][1]:
+            cite = f"{v['accuracy'][1]}"
+        else:
+            cite = f"{v['accuracy'][1]}, {v['f1'][1]}"
+        sepa = '\\phantom{-}' if accuracy_diff > 0 else ''
+        sepf = '\\phantom{-}' if f1_diff > 0 else ''
+        print('\\data{' + f"{k}" + "} & " + f"{accuracy_sdt:0.2f}" + f"/{f1_sdt:0.2f} " \
+    #           + " \\textit{" \
+    #           + f"({a_max_ind+1})" \
+    #           + "} & " \
+              + f"& {f_max_ind+1}" \
+              + " & " \
+    #           + f"{accuracy_sota:0.2f}" \
+    #           + " \\cite{" + f"{v['accuracy'][1]}" \
+    #           + "} & " \
+    #           + f"{f1_sota:0.2f}" \
+              + " \\cite{" \
+              + cite + "} & " \
+              + f"{sepa}{accuracy_diff:0.2f}/{sepf}{f1_diff:0.2f} \\\\")
