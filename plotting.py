@@ -1,4 +1,5 @@
-
+import numpy as np
+import matplotlib.pyplot as plt
 
 def process_tick_label(tick_label):
     ret = tick_label
@@ -7,6 +8,7 @@ def process_tick_label(tick_label):
     if tick_label.endswith("_df"):
         ret = tick_label[:-3]
     ret = ret.replace('_', '-')
+    print(ret)
     if ret == 'botometer-feedback-2019': return 'feedback-2019'
     if ret == 'cresci-rtbust-2019': return 'rtbust-2019'
     if ret == 'cresci-stock-2018': return 'stock-2018'
