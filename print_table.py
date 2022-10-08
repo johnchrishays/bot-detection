@@ -1,3 +1,4 @@
+import numpy as np
 
 def print_leave_one_out_table(df):
     max_depth = 5
@@ -5,8 +6,6 @@ def print_leave_one_out_table(df):
 
     for row in df.to_dict(orient='records'):
         k = row['left_out']
-        if k == 'varol-2017':
-            continue
 
         accuracies = [row[f'a{i}'] for i in range(1, max_depth+1)]
         a_max_ind = np.argmax(accuracies)
@@ -20,11 +19,8 @@ def print_leave_one_out_table(df):
                 a_max_ind = i
                 accuracy_sdt = acc
                 break
-        for i, f in enumerate(f1s):
-            if f1_sdt - f <= tolerance:
-                f_max_ind = i
-                f1_sdt = f
-                break
+        f_max_ind = i
+        f1_sdt = f1s[i]
                 
         ret = k
         if k.endswith('_one_hot'):

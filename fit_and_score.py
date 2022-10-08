@@ -1,5 +1,5 @@
 """ Functions for fitting shallow decision trees and random forests and scoring them. """
-import time
+from functools import reduce
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
@@ -12,6 +12,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.inspection import permutation_importance
 from sklearn.metrics import f1_score, recall_score, precision_score, accuracy_score
 from sklearn.tree import export_text
+import time
 
 from preprocess import drop_and_one_hot 
 from data_accessor import load_bot_repo_dataset
@@ -27,6 +28,8 @@ def timeit(func):
             print(f"Finished {func.__name__} at {end_time}. Execution time: {end_time - start_time} s")
         return result
     return wrapper
+
+
 
 
 def fit(X, y, method=None, depth=3):
@@ -120,11 +123,7 @@ def kfold_cv(X, y, method=None, depth=3, k=5, calibrate=False, silent=True, bala
 def train_test_fit_and_score_clf(X, y, method=None, depth=3, silent=False, prec_rec=True, balance=False):
     """ Train test split. """
     if balance:
-        X_human = X[y == 0]
-        X_bot = X[y == 1]
-        n_accts = min(len(X_human), len(X_bot))
-        balanced_X = pd.concat(X_human.sample(n_accts), X_bot.sample(n_accts))
-        balanced_y = [0] * n_accts + [1] * n_accts
+        balanced_X, balanced_y = balance_dataset(X, y)
         train, test, train_labels, test_labels = train_test_split(balanced_X, balanced_y, test_size=0.2)
     else:
         train, test, train_labels, test_labels = train_test_split(X, y, test_size=0.2)
@@ -253,3 +252,5 @@ def analyze_bot_repo_dataset_full(data_path, labels_path, depth=5, folds=5, soa_
     fig.tight_layout()
     print("-------------- DECISION TREE: k-fold cv --------------")
     return analyze_bot_repo_dataset(df, one_hot, labels, labels_path, k, soa_accuracy, soa_precision, soa_recall)
+
+
