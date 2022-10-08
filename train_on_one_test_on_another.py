@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
 
+from data_accessor import balance_dataset, get_shared_cols
 from fit_and_score import score, fit_and_score, train_test_fit_and_score
-from data_accessor import balance_dataset
 
 def namestr(obj, namespace):
     return [name for name in namespace if namespace[name] is obj]
@@ -28,7 +28,7 @@ def train_on_one_test_on_another(train_on, train_on_labels, test_on, test_on_lab
             test_on_balanced, test_on_labels_balanced = balance_dataset(test_on, test_on_labels)
             a,p,r,f = (score(clf, test_on_balanced[cols], test_on_labels_balanced, silent=True))
         else:
-            clf, *_ = fit_and_score(train_on[cols], train_on_labels, method=rf, silent=silent)
+            clf, *_ = fit_and_score(train_on[cols], train_on_labels, method=method, silent=silent)
             a,p,r,f = (score(clf, test_on[cols], test_on_labels, silent=True))
         
         scores = {
@@ -46,9 +46,9 @@ def train_on_one_test_on_another(train_on, train_on_labels, test_on, test_on_lab
 def train_test_botometer_combined(bots, humans, max_depth, silent=True):
     dataset_size = min(len(bots), len(humans))
     
-    cols = set.intersection(
-        set(bots.columns),
-        set(humans.columns)
+    cols = get_shared_cols(
+        bots.columns,
+        humans.columns
     )
     if 'created_at' in cols:
         cols.remove('created_at')

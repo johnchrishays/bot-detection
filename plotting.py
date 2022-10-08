@@ -1,4 +1,6 @@
-
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
 
 def process_tick_label(tick_label):
     ret = tick_label

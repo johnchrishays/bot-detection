@@ -15,6 +15,10 @@ from preprocess import load_json, preprocess_users, drop_and_one_hot, extract_us
 
 PROJ_PATH = "/nfs/sloanlab003/projects/bot_ensemble_proj/bot-detection"
 
+def get_shared_cols(df_list):
+    return set.intersection(*(set(df.columns) for df in df_list))
+
+
 def balance_dataset(X, y):
     """ Return balanced version of X, y. """
     y = pd.Series(y)
@@ -49,7 +53,7 @@ def load_twibot(path, drop_extra_cols=[]):
     twibot_one_hot = drop_and_one_hot(twibot_df, drop_cols, [ent for ent in DUMMY_COLUMNS + ['is_translator', 'contributors_enabled'] if ent not in drop_cols])
     return twibot_df, twibot_one_hot, twibot_labels
 
-def load_bot_repo_dataset(data_path, labels_path):
+def load_dataset(data_path, labels_path):
     """ Load any dataset that comes from bot repo in standard form. """
     profs = extract_users(data_path)
     df, one_hot, labels = preprocess_users(profs, labels_path)
@@ -354,12 +358,12 @@ def load_yang_tweets(data_path):
 def load_human_dataset_list():
     """ Load human datasets. """
     caverlee_2011, caverlee_2011_labels = load_caverlee(PROJ_PATH + "/data/social_honeypot_icwsm_2011/")
-    celebrity_df, celebrity_one_hot, celebrity_labels = load_bot_repo_dataset(PROJ_PATH + "/data/celebrity-2019_tweets.json", PROJ_PATH + "/data/celebrity-2019.tsv")
-    gilani, gilani_2017_one_hot, gilani_labels = load_bot_repo_dataset(PROJ_PATH + "/data/gilani-2017_tweets.json", PROJ_PATH + "/data/gilani-2017.tsv")
+    celebrity_df, celebrity_one_hot, celebrity_labels = load_dataset(PROJ_PATH + "/data/celebrity-2019_tweets.json", PROJ_PATH + "/data/celebrity-2019.tsv")
+    gilani, gilani_2017_one_hot, gilani_labels = load_dataset(PROJ_PATH + "/data/gilani-2017_tweets.json", PROJ_PATH + "/data/gilani-2017.tsv")
     gilani_derived_dfs, gilani_derived_labels = load_gilani_derived_bands(PROJ_PATH + f"/data/gilani_derived/classification_processed/")
-    bf, botometer_feedback_2019_one_hot, bf_labels = load_bot_repo_dataset(PROJ_PATH + "/data/botometer-feedback-2019_tweets.json", PROJ_PATH + "/data/botometer-feedback-2019.tsv")
-    rtbust, cresci_rtbust_2019_one_hot, rtbust_labels = load_bot_repo_dataset(PROJ_PATH + "/data/cresci-rtbust-2019_tweets.json", PROJ_PATH + "/data/cresci-rtbust-2019.tsv")
-    cresci_stock, cresci_stock_2018_one_hot, cresci_stock_labels = load_bot_repo_dataset(PROJ_PATH + "/data/cresci-stock-2018_tweets.json", PROJ_PATH + "/data/cresci-stock-2018.tsv")
+    bf, botometer_feedback_2019_one_hot, bf_labels = load_dataset(PROJ_PATH + "/data/botometer-feedback-2019_tweets.json", PROJ_PATH + "/data/botometer-feedback-2019.tsv")
+    rtbust, cresci_rtbust_2019_one_hot, rtbust_labels = load_dataset(PROJ_PATH + "/data/cresci-rtbust-2019_tweets.json", PROJ_PATH + "/data/cresci-rtbust-2019.tsv")
+    cresci_stock, cresci_stock_2018_one_hot, cresci_stock_labels = load_dataset(PROJ_PATH + "/data/cresci-stock-2018_tweets.json", PROJ_PATH + "/data/cresci-stock-2018.tsv")
     midterm, midterm_2018_one_hot, midterm_labels = load_midterm(PROJ_PATH + "/data/midterm-2018/midterm-2018_processed_user_objects.json", PROJ_PATH + "/data/midterm-2018/midterm-2018.tsv")
 
 
@@ -371,13 +375,11 @@ def load_human_dataset_list():
     cresci_stock_2018_one_hot_humans = cresci_stock_2018_one_hot[cresci_stock_labels.values == 0]
     midterm_2018_one_hot_humans = midterm_2018_one_hot[midterm_labels.values == 0]
 
-    cols = set.intersection(
-        set(celebrity_one_hot.columns),
-        set(botometer_feedback_2019_one_hot_humans.columns),
-        set(caverlee2011_humans.columns),
-        set(gilani_2017_one_hot_humans.columns),
-        set(cresci_stock_2018_one_hot_humans.columns),
-                        )
+    cols = get_shared_cols( celebrity_one_hot, 
+            botometer_feedback_2019_one_hot_humans, 
+            caverlee2011_humans,
+            gilani_2017_one_hot_humans,
+            cresci_stock_2018_one_hot_humans)
     return [
         caverlee2011_humans[cols], 
         botometer_feedback_2019_one_hot_humans[cols],
@@ -396,7 +398,7 @@ def get_intraclass_labels(df_list):
 
 def load_spammers(intradataset=False, balance=False):
     """ Load spammer type bots. """
-    pronbots_df, pronbots_one_hot, pronbots_labels = load_bot_repo_dataset(PROJ_PATH + "/data/pronbots-2019_tweets.json", PROJ_PATH + "/data/pronbots-2019.tsv")
+    pronbots_df, pronbots_one_hot, pronbots_labels = load_dataset(PROJ_PATH + "/data/pronbots-2019_tweets.json", PROJ_PATH + "/data/pronbots-2019.tsv")
     folder_names = [ 'social_spambots_1', 
     'social_spambots_2', 
     'social_spambots_3', 
@@ -440,7 +442,7 @@ def load_spammers(intradataset=False, balance=False):
 def load_fake_followers(intradataset=False, balance=False):
     """ Load fake follower bot datasets. """
     # Load in cresci data
-    vendor_purchased_df, vendor_purchased_one_hot, vendor_purchased_labels = load_bot_repo_dataset(PROJ_PATH + "/data/vendor-purchased-2019_tweets.json", PROJ_PATH + "/data/vendor-purchased-2019.tsv")
+    vendor_purchased_df, vendor_purchased_one_hot, vendor_purchased_labels = load_dataset(PROJ_PATH + "/data/vendor-purchased-2019_tweets.json", PROJ_PATH + "/data/vendor-purchased-2019.tsv")
     folder_names = ['fake_followers']
     is_bot = [1]
     cols_to_drop = COLUMNS_TO_DROP + ['profile_banner_url',  
@@ -472,10 +474,10 @@ def load_fake_followers(intradataset=False, balance=False):
 
 def load_other_bots(intradataset=False, balance=False):
     """ Load other-type bots. """
-    bf, botometer_feedback_2019_one_hot, bf_labels = load_bot_repo_dataset(PROJ_PATH + "/data/botometer-feedback-2019_tweets.json", PROJ_PATH + "/data/botometer-feedback-2019.tsv")
-    gilani, gilani_2017_one_hot, gilani_labels = load_bot_repo_dataset(PROJ_PATH + "/data/gilani-2017_tweets.json", PROJ_PATH + "/data/gilani-2017.tsv")
-    rtbust, cresci_rtbust_2019_one_hot, rtbust_labels = load_bot_repo_dataset(PROJ_PATH + "/data/cresci-rtbust-2019_tweets.json", PROJ_PATH + "/data/cresci-rtbust-2019.tsv")
-    cresci_stock, cresci_stock_2018_one_hot, cresci_stock_labels = load_bot_repo_dataset(PROJ_PATH + "/data/cresci-stock-2018_tweets.json", PROJ_PATH + "/data/cresci-stock-2018.tsv")
+    bf, botometer_feedback_2019_one_hot, bf_labels = load_dataset(PROJ_PATH + "/data/botometer-feedback-2019_tweets.json", PROJ_PATH + "/data/botometer-feedback-2019.tsv")
+    gilani, gilani_2017_one_hot, gilani_labels = load_dataset(PROJ_PATH + "/data/gilani-2017_tweets.json", PROJ_PATH + "/data/gilani-2017.tsv")
+    rtbust, cresci_rtbust_2019_one_hot, rtbust_labels = load_dataset(PROJ_PATH + "/data/cresci-rtbust-2019_tweets.json", PROJ_PATH + "/data/cresci-rtbust-2019.tsv")
+    cresci_stock, cresci_stock_2018_one_hot, cresci_stock_labels = load_dataset(PROJ_PATH + "/data/cresci-stock-2018_tweets.json", PROJ_PATH + "/data/cresci-stock-2018.tsv")
     midterm, midterm_2018_one_hot, midterm_labels = load_midterm(PROJ_PATH + "/data/midterm-2018/midterm-2018_processed_user_objects.json", PROJ_PATH + "/data/midterm-2018/midterm-2018.tsv")
 
 
@@ -485,11 +487,11 @@ def load_other_bots(intradataset=False, balance=False):
     cresci_stock_2018_one_hot_bot = cresci_stock_2018_one_hot[cresci_stock_labels.values == 1]
     midterm_2018_one_hot_bot = midterm_2018_one_hot[midterm_labels.values == 1]
 
-    cols = set.intersection(
-        set(botometer_feedback_2019_one_hot_bot.columns), 
-        set(gilani_2017_one_hot_bot.columns), 
-        set(cresci_rtbust_2019_one_hot_bot.columns), 
-        set(cresci_stock_2018_one_hot_bot.columns), 
+    cols = get_shared_cols(
+        botometer_feedback_2019_one_hot_bot,
+        gilani_2017_one_hot_bot,
+        cresci_rtbust_2019_one_hot_bot,
+        cresci_stock_2018_one_hot_bot
     )
     if balance:
         n_accts = min(len(botometer_feedback_2019_one_hot_bot), len(gilani_2017_one_hot_bot), len(cresci_rtbust_2019_one_hot_bot), len(cresci_stock_2018_one_hot_bot))

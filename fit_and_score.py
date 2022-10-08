@@ -15,7 +15,7 @@ from sklearn.tree import export_text
 import time
 
 from preprocess import drop_and_one_hot 
-from data_accessor import load_bot_repo_dataset
+from data_accessor import get_shared_cols
 
 def timeit(func):
     def wrapper(*args, **kwargs):
@@ -28,8 +28,6 @@ def timeit(func):
             print(f"Finished {func.__name__} at {end_time}. Execution time: {end_time - start_time} s")
         return result
     return wrapper
-
-
 
 
 def fit(X, y, method=None, depth=3):
@@ -219,7 +217,7 @@ def calculate_accuracy(precision, recall, num_bots, num_humans):
     return (true_positive + true_negative) / total
 
 
-def analyze_bot_repo_dataset(one_hot, labels, k=5, silent=False, kfold=True):
+def analyze_dataset(one_hot, labels, k=5, silent=False, kfold=True):
     """
     Compute k-fold cross validation for decision trees of depths 1-5, return scores for each.
     """
@@ -230,27 +228,28 @@ def analyze_bot_repo_dataset(one_hot, labels, k=5, silent=False, kfold=True):
         return scores 
     return [train_test_fit_and_score(one_hot, labels, depth=i, silent=silent) for i in range(1,6)]
 
-
-def analyze_bot_repo_dataset_full(data_path, labels_path, depth=5, folds=5, soa_accuracy=None, soa_precision=None, soa_recall=None):
-    df, one_hot, labels = load_bot_repo_dataset(data_path, labels_path)
-    # Fit and score on decision tree
-    print("-------------- DECISION TREE --------------")
-    plot_metrics(one_hot, labels, soa_accuracy=soa_accuracy, soa_precision=soa_precision, soa_recall=soa_recall)
-    humans = len([lab for lab in labels if lab == 0])
-    bots = len([lab for lab in labels if lab == 1])
-    print("# humans: ", humans, "# bots", bots)
-    # Fit and score on random forest
-    print("-------------- RANDOM FOREST --------------")
-    train, test, train_labels, test_labels = train_test_split(one_hot, labels, test_size=0.3)
-    rf = ensemble.RandomForestClassifier(n_estimators=100, max_depth=3)
-    clf_sig = CalibratedClassifierCV(rf, method='sigmoid')
-    rf_scores = kfold_cv(one_hot, labels, method=clf_sig, k=5)
-    print("Random forest k-fold cv scores:", rf_scores)
-    fig, axes = plt.subplots(1,2, figsize=(15,7))
-    mdi_feature_importance(rf_clf, list(one_hot.columns), axes[0])
-    permutation_feature_importance(axes[1], df, labels, DUMMY_COLUMNS + ['is_translator', 'contributors_enabled'])
-    fig.tight_layout()
-    print("-------------- DECISION TREE: k-fold cv --------------")
-    return analyze_bot_repo_dataset(df, one_hot, labels, labels_path, k, soa_accuracy, soa_precision, soa_recall)
-
-
+def analyze_twibot(twibot_2020_one_hot, twibot_2020_one_hot_test, twibot_labels, twibot_labels_test):
+    shared_columns = get_shared_cols([twibot_2020_one_hot, twibot_2020_one_hot_test]) # Since we want to check on test set, just use common columns between train/test.
+    twibot_scores = []
+    for i in range(1, 6):
+        # unbalanced
+        dt_clf = fit(twibot_2020_one_hot[shared_columns], twibot_labels, depth=i)
+        scr = score(dt_clf, twibot_2020_one_hot_test[shared_columns], twibot_labels_test, silent=True)
+        # balanced
+        baccs = []
+        iters = 5
+        for j in range(iters):
+            twibot_2020_humans = twibot_2020_one_hot[pd.Series(twibot_labels) == 0]
+            twibot_2020_bots = twibot_2020_one_hot[pd.Series(twibot_labels) == 1]
+            n_accts = min(len(twibot_2020_humans), len(twibot_2020_bots))
+            btwibot_labels = pd.Series([0]*n_accts + [1]*n_accts)
+            bal_clf = fit(pd.concat([twibot_2020_humans.sample(n_accts), twibot_2020_bots.sample(n_accts)])[shared_columns], btwibot_labels, depth=i)
+            twibot_2020_humans_test = twibot_2020_one_hot[pd.Series(twibot_labels) == 0]
+            twibot_2020_bots_test = twibot_2020_one_hot[pd.Series(twibot_labels) == 1]
+            n_accts_test = min(len(twibot_2020_humans_test), len(twibot_2020_bots_test))
+            btwibot_labels_test = [0]*n_accts_test + [1]*n_accts_test
+            bacc, *_ = score(bal_clf, pd.concat([twibot_2020_humans_test.sample(n_accts_test), twibot_2020_bots_test.sample(n_accts_test)])[shared_columns], btwibot_labels_test, silent=True)
+            baccs = baccs + [bacc]
+        mean_bacc = sum(baccs)/iters
+        twibot_scores.append(list(scr) + [mean_bacc])
+    return twibot_scores

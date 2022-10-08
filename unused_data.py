@@ -45,3 +45,6 @@ with open(kantepe_path,'rb') as f:
     kantepe = pd.DataFrame(data)
 
 kaiser = pyreadr.read_r(PROJ_PATH + '/data/kaiser/data_botometer.RData')['data_botometer']
+
+# EMD
+ersahin_2017, ersahin_2017_labels = load_emd(PROJ_PATH + '/data/EMD-2017/Twitter_dataset.arff') # Load data

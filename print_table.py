@@ -1,4 +1,8 @@
 import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+
+from plotting import process_tick_label
 
 def print_leave_one_out_table(df):
     max_depth = 5
@@ -126,15 +130,29 @@ def print_single_dataset_score_table(score_dict):
         sepa = '\\phantom{-}' if accuracy_diff > 0 else ''
         sepf = '\\phantom{-}' if f1_diff > 0 else ''
         print('\\data{' + f"{k}" + "} & " + f"{accuracy_sdt:0.2f}" + f"/{f1_sdt:0.2f} " \
-    #           + " \\textit{" \
-    #           + f"({a_max_ind+1})" \
-    #           + "} & " \
               + f"& {f_max_ind+1}" \
               + " & " \
-    #           + f"{accuracy_sota:0.2f}" \
-    #           + " \\cite{" + f"{v['accuracy'][1]}" \
-    #           + "} & " \
-    #           + f"{f1_sota:0.2f}" \
               + " \\cite{" \
               + cite + "} & " \
               + f"{sepa}{accuracy_diff:0.2f}/{sepf}{f1_diff:0.2f} \\\\")
+
+ 
+def print_totoa_matrix(train_on_one_test_on_another_performance, col_name):
+    cmap = plt.cm.get_cmap('RdYlBu')
+    if col_name == 'f3': cmap = plt.cm.get_cmap('YlGn')
+    # accuracy
+    print("\\begin{tikzpicture}[]")
+    print("  \\matrix[matrix of nodes,row sep=-\\pgflinewidth, column sep=-.1em,")
+    print("nodes={{rectangle}},")
+    print("column 1/.style={{anchor=east}},]{")
+    _df = pd.pivot_table(train_on_one_test_on_another_performance, values=col_name, index='train_on', columns='test_on').round(2)
+    for i,r in _df.round(2).iterrows():
+        s = "\\data{\\small{" + process_tick_label(i).replace('_','\\_')  + '}} & '
+        for e in list(r):
+            s += "|[fill={{rgb,255:red,{};green,{};blue,{}}}, value={}]|&".format(int(255*cmap(e)[0]), int(255*cmap(e)[1]), int(255*cmap(e)[2]), (e))
+        print(s[:-1],'\\\\')
+    print("};")
+    for i,e in enumerate(list(_df.index)):
+        print("\\node[label={{[label distance=0.5cm,text depth=-1ex,rotate=45]left:\\data{{\\small{{{}}}}} }}] at ({},-2.4) {{}};".format(process_tick_label(e).replace("_","\\_"), -.7 + (.7*i), end=' & '))
+    print("\\end{tikzpicture}\n\n")
+
