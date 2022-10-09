@@ -22,13 +22,13 @@ def get_shared_cols(df_list):
 def balance_dataset(X, y):
     """ Return balanced version of X, y. """
     y = pd.Series(y)
-    y_unique = y.unique()
+    y_unique = sorted(y.unique())
     X_list = []
     for i in y_unique:
         X_list.append(X[(y == i).values])
     n_accts = min(map(len, X_list))
     balanced_X = pd.concat([X_df.sample(n_accts) for X_df in X_list])
-    y_list = [[i]*n_accts for i in range(len(X_list))]
+    y_list = [[i]*n_accts for i in y_unique]
     balanced_y = pd.Series(reduce(lambda a,b: a + b, y_list))
     return balanced_X, balanced_y
 
@@ -375,11 +375,11 @@ def load_human_dataset_list():
     cresci_stock_2018_one_hot_humans = cresci_stock_2018_one_hot[cresci_stock_labels.values == 0]
     midterm_2018_one_hot_humans = midterm_2018_one_hot[midterm_labels.values == 0]
 
-    cols = get_shared_cols( celebrity_one_hot, 
+    cols = get_shared_cols( [celebrity_one_hot, 
             botometer_feedback_2019_one_hot_humans, 
             caverlee2011_humans,
             gilani_2017_one_hot_humans,
-            cresci_stock_2018_one_hot_humans)
+            cresci_stock_2018_one_hot_humans])
     return [
         caverlee2011_humans[cols], 
         botometer_feedback_2019_one_hot_humans[cols],
@@ -434,12 +434,13 @@ def load_spammers(intradataset=False, balance=False):
     spammers_df = pd.concat([cresci2017_spammers_one_hot[cols], pronbots_one_hot[cols]])
     if intradataset:
         spammers_labels = pd.concat([cresci2017_spammers_labels, pd.Series([7]*len(pronbots_one_hot))])
-        return spammers_df, spammers_labels
+        return spammers_df, spammers_labels, len(folder_names)
     else:
         return spammers_df
 
 
 def load_fake_followers(intradataset=False, balance=False):
+    n_datasets = 2
     """ Load fake follower bot datasets. """
     # Load in cresci data
     vendor_purchased_df, vendor_purchased_one_hot, vendor_purchased_labels = load_dataset(PROJ_PATH + "/data/vendor-purchased-2019_tweets.json", PROJ_PATH + "/data/vendor-purchased-2019.tsv")
@@ -463,17 +464,18 @@ def load_fake_followers(intradataset=False, balance=False):
         fake_followers_df = pd.concat([vendor_purchased_one_hot[cols].sample(n_accts), cresci2017_fake_followers_one_hot[cols].sample(n_accts)])
         fake_followers_df.fillna(0, inplace=True)
         fake_followers_labels = [0] * n_accts + [1] * n_accts
-        return fake_followers_df, fake_followers_labels
+        return fake_followers_df, fake_followers_labels, n_datasets
     fake_followers_df = pd.concat([vendor_purchased_one_hot, cresci2017_fake_followers_one_hot[cols]])
     fake_followers_df.fillna(0, inplace=True)
     if intradataset:
         fake_followers_labels = pd.Series([0] * len(vendor_purchased_one_hot) + [1] * len(cresci2017_fake_followers_one_hot))
-        return fake_followers_df, fake_followers_labels
+        return fake_followers_df, fake_followers_labels, n_datasets
     return fake_followers_df
 
 
 def load_other_bots(intradataset=False, balance=False):
     """ Load other-type bots. """
+    n_datasets = 4
     bf, botometer_feedback_2019_one_hot, bf_labels = load_dataset(PROJ_PATH + "/data/botometer-feedback-2019_tweets.json", PROJ_PATH + "/data/botometer-feedback-2019.tsv")
     gilani, gilani_2017_one_hot, gilani_labels = load_dataset(PROJ_PATH + "/data/gilani-2017_tweets.json", PROJ_PATH + "/data/gilani-2017.tsv")
     rtbust, cresci_rtbust_2019_one_hot, rtbust_labels = load_dataset(PROJ_PATH + "/data/cresci-rtbust-2019_tweets.json", PROJ_PATH + "/data/cresci-rtbust-2019.tsv")
@@ -487,22 +489,22 @@ def load_other_bots(intradataset=False, balance=False):
     cresci_stock_2018_one_hot_bot = cresci_stock_2018_one_hot[cresci_stock_labels.values == 1]
     midterm_2018_one_hot_bot = midterm_2018_one_hot[midterm_labels.values == 1]
 
-    cols = get_shared_cols(
+    cols = get_shared_cols([
         botometer_feedback_2019_one_hot_bot,
         gilani_2017_one_hot_bot,
         cresci_rtbust_2019_one_hot_bot,
         cresci_stock_2018_one_hot_bot
-    )
+    ])
     if balance:
         n_accts = min(len(botometer_feedback_2019_one_hot_bot), len(gilani_2017_one_hot_bot), len(cresci_rtbust_2019_one_hot_bot), len(cresci_stock_2018_one_hot_bot))
 
         other_bots = pd.concat([botometer_feedback_2019_one_hot_bot[cols].sample(n_accts), 
-                                    gilani_2017_one_hot_bot[cols].sample(n_accts), 
-                                                            cresci_rtbust_2019_one_hot_bot[cols].sample(n_accts), 
-                                                                                    cresci_stock_2018_one_hot_bot[cols].sample(n_accts)])
+                                gilani_2017_one_hot_bot[cols].sample(n_accts), 
+                                cresci_rtbust_2019_one_hot_bot[cols].sample(n_accts), 
+                                cresci_stock_2018_one_hot_bot[cols].sample(n_accts)])
 
         other_bots_labels = [0]*n_accts + [1]*n_accts + [2]*n_accts + [3]*n_accts
-        return other_bots, other_bots_labels
+        return other_bots, other_bots_labels, n_datasets
 
     other_bots = pd.concat([botometer_feedback_2019_one_hot_bot[cols], 
                             gilani_2017_one_hot_bot[cols], 
@@ -516,9 +518,9 @@ def load_other_bots(intradataset=False, balance=False):
                                 cresci_rtbust_2019_one_hot_bot[cols].sample(n_accts), 
                                 cresci_stock_2018_one_hot_bot[cols].sample(n_accts)])
         other_bots_labels = [0]*n_accts + [1]*n_accts + [2]*n_accts + [3]*n_accts
-        return other_bots, other_bots_labels
+        return other_bots, other_bots_labels, n_datasets
     if intradataset:
         other_bots_labels = [0]*len(botometer_feedback_2019_one_hot_bot) + [1]*len(gilani_2017_one_hot_bot) + [2]*len(cresci_rtbust_2019_one_hot_bot) + [3]*len(cresci_stock_2018_one_hot_bot)
-        return other_bots, other_bots_labels
+        return other_bots, other_bots_labels, n_datasets
 
     return other_bots

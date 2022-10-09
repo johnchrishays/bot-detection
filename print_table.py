@@ -1,17 +1,21 @@
-import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
 import pandas as pd
+
 
 from plotting import process_tick_label
 import re
 
 from plotting import process_tick_label
 
+def command(w, com):
+    return "\\" + com + "{" + w + "}"
+
 def data(w):
-    return "\\data{" + w + "}"
+    return command(w, "data")
 
 def cite(w):
-    return "\\cite{" + w + "}"
+    return command(w, "cite")
 
 def print_row(w_list):
     print(" & ".join(w_list), "\\\\")
@@ -121,21 +125,24 @@ def print_leave_one_out_table(df, random_forest=True):
         if random_forest:
             accuracy = row[f'a_rf']
             f1 = row[f'f_rf']
-            balanced_accuracy = [row[f'ba_rf'] for i in range(1, max_depth+1)]
-            print_row([name, f"{accuracy:0.2f}/{f1:0.2f}/f{balanced_accuracy:0.2f}"])
+            balanced_accuracy = row[f'ba_rf']
+            print_row([name, f"{accuracy:0.2f}/{f1:0.2f}/{balanced_accuracy:0.2f}"])
         else:
             accuracies = [row[f'a{i}'] for i in range(1, max_depth+1)]
             f1s = [row[f'f{i}'] for i in range(1, max_depth+1)]
             balanced_accuracy = [row[f'ba{i}'] for i in range(1, max_depth+1)]
             max_ind, accuracy, f1, balanced_accuracy = get_shallowest_good_results(0.025, accuracies, f1s, balanced_accuracies)
-            print_row([name, f"{accuracy:0.2f}/{f1:0.2f}/f{balanced_accuracy:0.2f}", f"{max_ind+1}"])
+            print_row([name, f"{accuracy:0.2f}/{f1:0.2f}/{balanced_accuracy:0.2f}", f"{max_ind+1}"])
 
 
 
  
-def print_totoa_matrix(train_on_one_test_on_another_performance, col_name):
-    cmap = plt.cm.get_cmap('RdYlBu')
-    if col_name == 'f3': cmap = plt.cm.get_cmap('YlGn')
+def print_totoa_matrix(train_on_one_test_on_another_performance, col_name, start_x = -0.7, start_y = -2.4):
+    colors = ["darkred", "lightyellow", "mediumblue"]
+    cmap = LinearSegmentedColormap.from_list("ryb", colors)
+    if col_name == 'f': 
+        colors = ["lightyellow", "mediumblue"]
+        cmap = LinearSegmentedColormap.from_list("yb", colors)
     # accuracy
     print("\\begin{tikzpicture}[]")
     print("  \\matrix[matrix of nodes,row sep=-\\pgflinewidth, column sep=-.1em,")
@@ -149,6 +156,13 @@ def print_totoa_matrix(train_on_one_test_on_another_performance, col_name):
         print(s[:-1],'\\\\')
     print("};")
     for i,e in enumerate(list(_df.index)):
-        print("\\node[label={{[label distance=0.5cm,text depth=-1ex,rotate=45]left:\\data{{\\small{{{}}}}} }}] at ({},-2.4) {{}};".format(process_tick_label(e).replace("_","\\_"), -.7 + (.7*i), end=' & '))
+        t_lab = process_tick_label(e)
+        print("\\node[label={[label distance=0.5cm,text depth=-1ex,rotate=45]left:", data(command(t_lab, 'small')), "}] at", f"({start_x + (0.7*i)},{start_y})", "{};")
     print("\\end{tikzpicture}\n\n")
+
+
+def print_intratype_test(intraclass_dict):
+    for name, v in intraclass_dict.items():
+        print_row([data(name), f'{v["a"]:.2f}/{v["ba"]:.2f}', f'{v["n_datasets"]}'])
+
 

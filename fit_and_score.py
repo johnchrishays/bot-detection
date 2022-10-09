@@ -15,7 +15,7 @@ from sklearn.tree import export_text
 import time
 
 from preprocess import drop_and_one_hot 
-from data_accessor import get_shared_cols
+from data_accessor import get_shared_cols, balance_dataset
 
 def timeit(func):
     def wrapper(*args, **kwargs):
