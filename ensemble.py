@@ -125,4 +125,93 @@ def get_max_confidence_rf(probabilities, i):
     conf_i[-1] = 1 - conf_i[-1]
     return np.argmax(conf_i), max(conf_i)
 
+# Ensemble of specialized decision trees
 
+def split_human_df(human_df, n_datasets, dataset_size):
+    human_df_sample = human_df.sample(n=n_datasets*dataset_size)
+    return [human_df_sample[i*dataset_size:(i+1)*dataset_size] for i in range(n_datasets)]
+
+botometer_datasets = [simple_df, spammers_df, fake_followers_df, self_declared_df, political_bots_df, other_bots]
+human_dfs = split_human_df(human_df, len(botometer_datasets), dataset_size)
+
+bot_names = [get_dataset_name(d) for d in botometer_datasets]
+
+
+clfs, test_aggregate_df, test_labels_aggregate_concat = get_ensemble_of_classifiers(botometer_datasets, human_dfs, bot_names, depth=4)
+
+
+score_ensemble_speicalized_trees(clfs, test_aggregate_df, test_labels_aggregate_concat)
+
+rf = ensemble.RandomForestClassifier(n_estimators=100)
+rf_clfs, test_aggregate_df, test_labels_aggregate_concat = get_ensemble_of_classifiers(botometer_datasets, human_dfs, bot_names, method=rf)
+
+# Ensemble of specialized random forests
+
+predictions = [rf_clfs[i].predict(test_aggregate_df) for i in range(n_classifiers)]
+probs = [rf_clfs[i].predict_proba(test_aggregate_df) for i in range(n_classifiers)]
+probs = [p[:,0] for p in probs]
+most_confident_clf = [get_max_confidence_rf(probs, i)[0] for i in range(len(test_aggregate_df))]
+max_prediction = [predictions[j][i] for i,j in enumerate(most_confident_clf)]
+print(f"Accuracy: {accuracy_score(max_prediction, test_labels_aggregate_concat)}")
+print(f"F1: {f1_score(max_prediction, test_labels_aggregate_concat)}")
+
+
+# Just simple decision rules
+
+all_clf = clfs[-1]
+all_predictions = all_clf.predict(test_aggregate_df)
+print(f"Accuracy: {accuracy_score(all_predictions, test_labels_aggregate_concat)}")
+print(f"F1: {f1_score(all_predictions, test_labels_aggregate_concat)}")
+
+# Just random forest 
+
+all_clf_rf = rf_clfs[-1]
+all_predictions_rf = all_clf_rf.predict(test_aggregate_df)
+print(f"Accuracy: {accuracy_score(all_predictions_rf, test_labels_aggregate_concat)}")
+print(f"F1: {f1_score(all_predictions_rf, test_labels_aggregate_concat)}")
+
+# Testing on held-out datasets
+
+hold_out_test_df = pd.concat([cresci_stock_2018_one_hot[cols], cresci_rtbust_2019_one_hot[cols], gilani_2017_one_hot[cols]])
+hold_out_test_labels = pd.concat([cresci_stock_labels, rtbust_labels, gilani_labels])
+
+score_ensemble_speicalized_trees(clfs, hold_out_test_df, hold_out_test_labels)
+
+score_ensemble_speicalized_trees(clfs, cresci_stock_2018_one_hot[cols], cresci_stock_labels)
+
+score_ensemble_speicalized_trees(clfs, cresci_rtbust_2019_one_hot[cols], rtbust_labels)
+
+score_ensemble_speicalized_trees(clfs, gilani_2017_one_hot[cols], gilani_labels)
+
+all_predictions = all_clf.predict(hold_out_test_df)
+print(f"Accuracy: {accuracy_score(all_predictions, hold_out_test_labels)}")
+print(f"F1: {f1_score(all_predictions, hold_out_test_labels)}")
+
+all_predictions = all_clf.predict(cresci_stock_2018_one_hot[cols])
+print(f"Accuracy: {accuracy_score(all_predictions, cresci_stock_labels)}")
+print(f"F1: {f1_score(all_predictions, cresci_stock_labels)}")
+
+all_predictions = all_clf.predict(cresci_rtbust_2019_one_hot[cols])
+print(f"Accuracy: {accuracy_score(all_predictions, rtbust_labels)}")
+print(f"F1: {f1_score(all_predictions, rtbust_labels)}")
+
+all_predictions = all_clf.predict(gilani_2017_one_hot[cols])
+print(f"Accuracy: {accuracy_score(all_predictions, gilani_labels)}")
+print(f"F1: {f1_score(all_predictions, gilani_labels)}")
+
+all_clf_rf = rf_clfs[-1]
+all_predictions_rf = all_clf_rf.predict(hold_out_test_df)
+print(f"Accuracy: {accuracy_score(all_predictions_rf, hold_out_test_labels)}")
+print(f"F1: {f1_score(all_predictions_rf, hold_out_test_labels)}")
+
+all_predictions_rf = all_clf_rf.predict(cresci_stock_2018_one_hot[cols])
+print(f"Accuracy: {accuracy_score(all_predictions_rf, cresci_stock_labels)}")
+print(f"F1: {f1_score(all_predictions_rf, cresci_stock_labels)}")
+
+all_predictions_rf = all_clf_rf.predict(cresci_rtbust_2019_one_hot[cols])
+print(f"Accuracy: {accuracy_score(all_predictions_rf, rtbust_labels)}")
+print(f"F1: {f1_score(all_predictions_rf, rtbust_labels)}")
+
+all_predictions_rf = all_clf_rf.predict(gilani_2017_one_hot[cols])
+print(f"Accuracy: {accuracy_score(all_predictions_rf, gilani_labels)}")
+print(f"F1: {f1_score(all_predictions_rf, gilani_labels)}")
