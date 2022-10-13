@@ -22,12 +22,15 @@ def print_row(w_list):
 def get_score(score, dataset_name):
     if score == "":
         return -1
-    match = re.search(f"all: ([0-9]*(\.\d+)?)", score)
-    if match:
-        return -1
     match = re.search(f"{dataset_name}: ([0-9]*(\.\d+)?)", score)
     if match: 
         return float(match.group(1))
+    match = re.search(f"[a-zA-Z]+-[0-9]+: ([0-9]*(\.\d+)?)", score)
+    if match:
+        return -1
+    match = re.search(f"all: ([0-9]*(\.\d+)?)", score)
+    if match:
+        return -1
     return float(score)
 
 
@@ -99,17 +102,40 @@ def print_single_dataset_score_table(sota_dict, sdt_df):
 
         accuracy_diff = accuracy_sdt - accuracy_sota
         f1_diff = f1_sdt - f1_sota
-        if v['accuracy'][1] == v['f1'][1]:
+
+        if accuracy_diff > 0 and f1_diff > 0:
+            c = '\\;\\;---\\;\\;'
+        elif accuracy_diff > 0:
             citation = f"{v['accuracy'][1]}"
+            c = cite(citation)
+        elif f1_diff > 0:
+            citation = f"{v['f1'][1]}"
+            c = cite(citation)
+        elif v['accuracy'][1] == v['f1'][1]:
+            citation = f"{v['accuracy'][1]}"
+            c = cite(citation)
         else:
             citation = f"{v['accuracy'][1]}, {v['f1'][1]}"
-        sepa = '\\phantom{-}' if accuracy_diff > 0 else ''
-        sepf = '\\phantom{-}' if f1_diff > 0 else ''
+            c = cite(citation)
+            
+        #sepa = '\\phantom{-}' if accuracy_diff > 0 else ''
+        #sepf = '\\phantom{-}' if f1_diff > 0 else ''
+        sepa = ''
+        sepf = ''
+        if accuracy_diff > 0:
+            accuracy_diff = '\\;\\;---\\;\\;\\,'
+        else:
+            accuracy_diff = f'{accuracy_diff:0.2f}'
+        if f1_diff > 0:
+            f1_diff = '\\;\\;---'
+        else:
+            f1_diff = f'{f1_diff:0.2f}'
+
         print_row([data(k), 
                    f"{accuracy_sdt:0.2f}/{f1_sdt:0.2f}/{balanced_accuracy_sdt:0.2f} ", 
                    f"{max_ind+1}",
-                   cite(citation),
-                   f"{sepa}{accuracy_diff:0.2f}/{sepf}{f1_diff:0.2f}"
+                   c,
+                   f"{sepa}{accuracy_diff}/{sepf}{f1_diff}"
                    ])
 
 def print_single_dataset_score_table_without_sota(sdt_df, max_depth, print_balanced_acc=True):
