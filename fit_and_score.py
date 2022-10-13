@@ -1,4 +1,5 @@
 """ Functions for fitting shallow decision trees and random forests and scoring them. """
+
 from functools import reduce
 import numpy as np
 import matplotlib.pyplot as plt
@@ -10,7 +11,7 @@ from sklearn.base import clone
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import train_test_split
 from sklearn.inspection import permutation_importance
-from sklearn.metrics import f1_score, recall_score, precision_score, accuracy_score
+from sklearn.metrics import f1_score, recall_score, precision_score, accuracy_score, balanced_accuracy_score
 from sklearn.tree import export_text
 import time
 
@@ -50,8 +51,10 @@ def score(clf, X, y, method=None, silent=False, prec_rec=True):
     if method is None and not silent:
         r = export_text(clf, feature_names=list(X.columns), show_weights=True)
         print(r)
+
     accuracy = clf.score(X, y)
     preds = clf.predict(X)
+    balanced_accuracy = balanced_accuracy_score(y, preds)
     if prec_rec:
         precision = precision_score(y, preds)
         recall = recall_score(y, preds)
@@ -65,7 +68,8 @@ def score(clf, X, y, method=None, silent=False, prec_rec=True):
         print(f"Precision", precision)
         print(f"Recall:", recall)
         print(f"F1:", f1)
-    return accuracy, precision, recall, f1
+        print(f"Balanced accuracy:", balanced_accuracy)
+    return accuracy, precision, recall, f1, balanced_accuracy
 
 
 def fit_and_score(X, y, method=None, depth=3, silent=False, prec_rec=True):
@@ -73,29 +77,19 @@ def fit_and_score(X, y, method=None, depth=3, silent=False, prec_rec=True):
     Fit model, print out the ascii tree and scores and return the model/scores.
     """
     clf = fit(X, y, method, depth)
-    accuracy, precision, recall, f1 = score(clf, X, y, method, silent, prec_rec)
-    return clf, accuracy, precision, recall, f1
+    accuracy, precision, recall, f1, balanced_accuracy = score(clf, X, y, method, silent, prec_rec)
+    return clf, accuracy, precision, recall, f1, balanced_accuracy
 
 
 @timeit
-def kfold_cv(X, y, method=None, depth=3, k=5, calibrate=False, silent=True, balance=False):
+def kfold_cv(X, y, method=None, depth=3, k=5, calibrate=False, silent=True, balance=False, prec_rec=True):
     """
     Run fit_and_score k times and compute test score statistics.
     """
     scores = []
-    if balance:
-        humans = X.loc[(y == 0).values]
-        bots = X.loc[(y == 1).values]
-        n_accts = min(len(humans), len(bots))
-        balanced_labels = pd.Series([0]*n_accts + [1]*n_accts)
-        balanced_X = pd.concat([humans.sample(n_accts), bots.sample(n_accts)])
-        inds = np.random.permutation(len(balanced_X))
-        shuffled_X = balanced_X.iloc[inds]
-        shuffled_y = balanced_labels.iloc[inds]
-    else:
-        inds = np.random.permutation(len(X))
-        shuffled_X = X.iloc[inds]
-        shuffled_y = y.iloc[inds]
+    inds = np.random.permutation(len(X))
+    shuffled_X = X.iloc[inds]
+    shuffled_y = y.iloc[inds]
     fold_size = (len(shuffled_X) // k)+1
     for i in range(k):
         if not silent:
@@ -108,31 +102,27 @@ def kfold_cv(X, y, method=None, depth=3, k=5, calibrate=False, silent=True, bala
         # Fit
         clf = fit(train_X, train_y, method=method, depth=depth)
         if not calibrate:
-            scr = score(clf, test_X, test_y, method, silent)
+            scr = score(clf, test_X, test_y, method, silent, prec_rec)
         else:
             probs = clf.predict_proba(test_X)
             preds = [0 if p[0] > 0.5 else 1 for p in probs]
-            scr = (accuracy_score(y, preds), precision_score(y, preds), recall_score(y, preds), f1_score(y, preds))
+            scr = (accuracy_score(y, preds), precision_score(y, preds), recall_score(y, preds), f1_score(y, preds), balanced_accuracy_score(y, preds))
         scores.append(scr)
-    avg_scores = [sum([row[i] for row in scores])/k for i in range(4)]
+    avg_scores = [sum([row[i] for row in scores])/k for i in range(len(scores[0]))]
     return avg_scores
     
 @timeit
-def train_test_fit_and_score_clf(X, y, method=None, depth=3, silent=False, prec_rec=True, balance=False):
+def train_test_fit_and_score_clf(X, y, method=None, depth=3, silent=False, prec_rec=True):
     """ Train test split. """
-    if balance:
-        balanced_X, balanced_y = balance_dataset(X, y)
-        train, test, train_labels, test_labels = train_test_split(balanced_X, balanced_y, test_size=0.2)
-    else:
-        train, test, train_labels, test_labels = train_test_split(X, y, test_size=0.2)
+    train, test, train_labels, test_labels = train_test_split(X, y, test_size=0.2)
     clf, *_ = fit_and_score(train, train_labels, method=method, depth=depth, silent=True, prec_rec=prec_rec)
     scr = score(clf, test, test_labels, method=method, silent=silent, prec_rec=prec_rec)
     return clf, scr
 
 
-def train_test_fit_and_score(X, y, method=None, depth=3, silent=False, prec_rec=True, balance=False):
+def train_test_fit_and_score(X, y, method=None, depth=3, silent=False, prec_rec=True):
     """ Train test split. """
-    _, scr = train_test_fit_and_score_clf(X, y, method, depth, silent, prec_rec, balance)
+    _, scr = train_test_fit_and_score_clf(X, y, method, depth, silent, prec_rec)
     return scr
 
 
@@ -217,39 +207,42 @@ def calculate_accuracy(precision, recall, num_bots, num_humans):
     return (true_positive + true_negative) / total
 
 
-def analyze_dataset(one_hot, labels, k=5, silent=False, kfold=True):
+def analyze_dataset(one_hot, labels, k=5, silent=False, kfold=True, max_depth=4, prec_rec=True):
     """
     Compute k-fold cross validation for decision trees of depths 1-5, return scores for each.
     """
     if kfold:
-        unbalanced_scores = [kfold_cv(one_hot, pd.Series(labels), depth=i, k=k, balance=False) for i in range(1,6)]
-        balanced_scores = [kfold_cv(one_hot, pd.Series(labels), depth=i, k=k, balance=True) for i in range(1,6)]
-        scores = [[u[0], u[1], u[2], u[3], b[0]] for u, b in zip(unbalanced_scores, balanced_scores)]
+        scores = [kfold_cv(one_hot, pd.Series(labels), depth=i, k=k, silent=silent, prec_rec=prec_rec) for i in range(1,max_depth+1)]
         return scores 
-    return [train_test_fit_and_score(one_hot, labels, depth=i, silent=silent) for i in range(1,6)]
+    return [train_test_fit_and_score(one_hot, labels, depth=i, silent=silent) for i in range(1,max_depth+1)]
 
-def analyze_twibot(twibot_2020_one_hot, twibot_2020_one_hot_test, twibot_labels, twibot_labels_test):
-    shared_columns = get_shared_cols([twibot_2020_one_hot, twibot_2020_one_hot_test]) # Since we want to check on test set, just use common columns between train/test.
+
+def analyze_twibot(twibot_one_hot, twibot_one_hot_test, twibot_labels, twibot_labels_test):
+    shared_columns = get_shared_cols([twibot_one_hot, twibot_one_hot_test]) # Since we want to check on test set, just use common columns between train/test.
     twibot_scores = []
     for i in range(1, 6):
-        # unbalanced
-        dt_clf = fit(twibot_2020_one_hot[shared_columns], twibot_labels, depth=i)
-        scr = score(dt_clf, twibot_2020_one_hot_test[shared_columns], twibot_labels_test, silent=True)
-        # balanced
-        baccs = []
-        iters = 5
-        for j in range(iters):
-            twibot_2020_humans = twibot_2020_one_hot[pd.Series(twibot_labels) == 0]
-            twibot_2020_bots = twibot_2020_one_hot[pd.Series(twibot_labels) == 1]
-            n_accts = min(len(twibot_2020_humans), len(twibot_2020_bots))
-            btwibot_labels = pd.Series([0]*n_accts + [1]*n_accts)
-            bal_clf = fit(pd.concat([twibot_2020_humans.sample(n_accts), twibot_2020_bots.sample(n_accts)])[shared_columns], btwibot_labels, depth=i)
-            twibot_2020_humans_test = twibot_2020_one_hot[pd.Series(twibot_labels) == 0]
-            twibot_2020_bots_test = twibot_2020_one_hot[pd.Series(twibot_labels) == 1]
-            n_accts_test = min(len(twibot_2020_humans_test), len(twibot_2020_bots_test))
-            btwibot_labels_test = [0]*n_accts_test + [1]*n_accts_test
-            bacc, *_ = score(bal_clf, pd.concat([twibot_2020_humans_test.sample(n_accts_test), twibot_2020_bots_test.sample(n_accts_test)])[shared_columns], btwibot_labels_test, silent=True)
-            baccs = baccs + [bacc]
-        mean_bacc = sum(baccs)/iters
-        twibot_scores.append(list(scr) + [mean_bacc])
+        dt_clf = fit(twibot_one_hot[shared_columns], twibot_labels, depth=i)
+        scr = score(dt_clf, twibot_one_hot_test[shared_columns], twibot_labels_test, silent=True)
+        twibot_scores.append(list(scr))
     return twibot_scores
+
+def mean_performance_sdt(df, labels, depth):
+    """ Run train test split 5 times and report the accuracy, f1 and balanced accuracy averaged across the results. """
+    accs = []
+    f1s = []
+    baccs = []
+    n_iters = 5
+    for i in range(n_iters):
+        acc, _, _, f1, bacc = train_test_fit_and_score(df, labels, depth=depth)
+        accs.append(acc)
+        f1s.append(f1)
+        baccs.append(bacc)
+
+    mean_acc = sum(accs)/n_iters
+    mean_f1 = sum(accs)/n_iters
+    mean_bacc = sum(baccs)/n_iters
+    print(f"---Mean results across {n_iters} iterations---")
+    print(f"Accuracy: {mean_acc}")
+    print(f"F1: {mean_f1}")
+    print(f"Balanced accuracy: {mean_bacc}")
+    return mean_acc, mean_f1, mean_bacc

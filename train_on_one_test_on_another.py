@@ -14,25 +14,23 @@ def get_dataset_name(df):
     except:
         return "Unknown"
 
-def train_on_one_test_on_another(train_on, train_on_labels, test_on, test_on_labels, train_on_name, test_on_name, method=None, balance=True, silent=True):
+def train_on_one_test_on_another(train_on, train_on_labels, test_on, test_on_labels, train_on_name, test_on_name, method=None, silent=True):
     cols = get_shared_cols([train_on, test_on])
     scores = {
         'train_on': train_on_name,
         'test_on': test_on_name,
     }
-    if balance:
-        train_on_balanced, train_on_labels_balanced = balance_dataset(train_on, train_on_labels)
-        clf, *_ = fit_and_score(train_on_balanced[cols], train_on_labels_balanced, method=method, silent=silent)
-        test_on_balanced, test_on_labels_balanced = balance_dataset(test_on, test_on_labels)
-        a,p,r,f = score(clf, test_on_balanced[cols], test_on_labels_balanced, silent=True)
+    if train_on_name == test_on_name:
+        (a,p,r,f,ba) = train_test_fit_and_score(train_on[cols], train_on_labels, method=method, silent=silent)
     else:
         clf, *_ = fit_and_score(train_on[cols], train_on_labels, method=method, silent=silent)
-        a,p,r,f = score(clf, test_on[cols], test_on_labels, silent=True)
+        a,p,r,f,ba = score(clf, test_on[cols], test_on_labels, silent=True)
     scores.update({
         f'a': a,
         f'p': p,
         f'r': r,
-        f'f': f
+        f'f': f,
+        f'ba': ba
     })
 
     if not silent:
@@ -56,19 +54,20 @@ def train_test_botometer_combined(bots, humans, bots_name, max_depth, silent=Tru
     }
     
     for i in range(1, max_depth+1):
-        a,p,r,f = train_test_fit_and_score(X, y, depth=i, silent=silent, balance=True)
+        a,p,r,f,ba = train_test_fit_and_score(X, y, depth=i, silent=silent)
         #prop_bots = sum(test_on_labels)/len(test_on_labels)
         scores.update({
             f'a{i}': a,
             f'p{i}': p,
             f'r{i}': r,
             f'f{i}': f,
+            f'ba{i}': ba,
         })
         
     return scores
         
 
-def train_on_one_test_on_another_botometer_combined(bots1, bots2, humans, bots1_name, bots2_name, method=None, balance=False, silent=True):
+def train_on_one_test_on_another_botometer_combined(bots1, bots2, humans, bots1_name, bots2_name, method=None, silent=True):
     dataset_size = min(len(bots1), len(bots2), len(humans))
     human1_inds = np.random.permutation(dataset_size)
     
@@ -95,19 +94,14 @@ def train_on_one_test_on_another_botometer_combined(bots1, bots2, humans, bots1_
         'test_on': bots2_name
     }
 
-    if balance:
-        train_on_balanced, train_on_labels_balanced = balance_dataset(train_on, train_on_labels)
-        clf, *_ = fit_and_score(train_on_balanced[cols], train_on_labels_balanced, method=method, silent=silent)
-        test_on_balanced, test_on_labels_balanced = balance_dataset(test_on, test_on_labels)
-        a,p,r,f = score(clf, test_on_balanced[cols], test_on_labels_balanced, silent=True)
-    else:
-        clf, *_ = fit_and_score(train_on[cols], train_on_labels, method=method, silent=silent)
-        a,p,r,f = score(clf, test_on[cols], test_on_labels, silent=True)
+    clf, *_ = fit_and_score(train_on[cols], train_on_labels, method=method, silent=silent)
+    a,p,r,f,ba = score(clf, test_on[cols], test_on_labels, silent=True)
     scores.update({
         f'a': a,
         f'p': p,
         f'r': r,
-        f'f': f
+        f'f': f,
+        f'ba': ba
     })
     
     return scores

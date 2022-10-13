@@ -6,8 +6,6 @@ import pandas as pd
 from plotting import process_tick_label
 import re
 
-from plotting import process_tick_label
-
 def command(w, com):
     return "\\" + com + "{" + w + "}"
 
@@ -48,6 +46,7 @@ def get_shallowest_good_results(tolerance, accuracies, f1s, balanced_accuracies)
             accuracy_sdt = acc
             f1_sdt = f
             return i, accuracy_sdt, f1_sdt, balanced_accuracies[i]
+    return i, accuracy_sdt, f1_sdt, balanced_accuracies[i]
 
 
 def print_dataset_table(dataset_df, benchmark_only):
@@ -113,12 +112,37 @@ def print_single_dataset_score_table(sota_dict, sdt_df):
                    f"{sepa}{accuracy_diff:0.2f}/{sepf}{f1_diff:0.2f}"
                    ])
 
+def print_single_dataset_score_table_without_sota(sdt_df, max_depth, print_balanced_acc=True):
+    tolerance = 0.025
 
-def print_leave_one_out_table(df, random_forest=True):
+    for row in sdt_df.to_dict(orient="records"):
+        # sdt
+        accuracies = [row[f'a{i}'] for i in range(1, max_depth+1)]
+        f1s = [row[f'f{i}'] for i in range(1, max_depth+1)]
+        balanced_accuracies = [row[f'ba{i}'] for i in range(1, max_depth+1)]
+        accuracy_sdt = max(accuracies)
+        f1_sdt = max(f1s)
+        # prefer shallower decision trees if accuracy isn't too different
+        max_ind, accuracy_sdt, f1_sdt, balanced_accuracy_sdt = get_shallowest_good_results(0.025, accuracies, f1s, balanced_accuracies)
+
+        
+        if print_balanced_acc:
+            perf = f"{accuracy_sdt:0.2f}/{f1_sdt:0.2f}/{balanced_accuracy_sdt:0.2f} "
+        else:
+            perf = f"{accuracy_sdt:0.2f}/{f1_sdt:0.2f} "
+        print_row([data(process_tick_label(row['dataset'])), 
+                    perf,
+                    f"{max_ind+1}"
+                    ])
+
+
+def print_leave_one_out_table(oos_df, is_df, random_forest=True):
     max_depth = 5
     tolerance = 0.025
 
-    for row in df.to_dict(orient='records'):
+    for i in range(len(oos_df)):
+        row = oos_df.iloc[i]
+        is_row = is_df.iloc[i]
         k = row['left_out']
         name = process_tick_label(k)
 
@@ -126,18 +150,24 @@ def print_leave_one_out_table(df, random_forest=True):
             accuracy = row[f'a_rf']
             f1 = row[f'f_rf']
             balanced_accuracy = row[f'ba_rf']
-            print_row([name, f"{accuracy:0.2f}/{f1:0.2f}/{balanced_accuracy:0.2f}"])
+
+            is_accuracy = is_row[f'a_rf']
+            is_f1 = is_row[f'f_rf']
+            is_balanced_accuracy = is_row[f'ba_rf']
+            print_row([data(name), 
+                f"{is_accuracy:0.2f}/{is_f1:0.2f}/{is_balanced_accuracy:0.2f}",
+                f"{accuracy:0.2f}/{f1:0.2f}/{balanced_accuracy:0.2f}"])
         else:
             accuracies = [row[f'a{i}'] for i in range(1, max_depth+1)]
             f1s = [row[f'f{i}'] for i in range(1, max_depth+1)]
             balanced_accuracy = [row[f'ba{i}'] for i in range(1, max_depth+1)]
             max_ind, accuracy, f1, balanced_accuracy = get_shallowest_good_results(0.025, accuracies, f1s, balanced_accuracies)
-            print_row([name, f"{accuracy:0.2f}/{f1:0.2f}/{balanced_accuracy:0.2f}", f"{max_ind+1}"])
+            print_row([data(name), f"{accuracy:0.2f}/{f1:0.2f}/{balanced_accuracy:0.2f}", f"{max_ind+1}"])
 
 
 
  
-def print_totoa_matrix(train_on_one_test_on_another_performance, col_name, start_x = -0.7, start_y = -2.4):
+def print_totoa_matrix(train_on_one_test_on_another_performance, col_name, start_x = -0.7, start_y = -2.4, label_offset=0.6):
     colors = ["darkred", "lightyellow", "mediumblue"]
     cmap = LinearSegmentedColormap.from_list("ryb", colors)
     if col_name == 'f': 
@@ -145,24 +175,46 @@ def print_totoa_matrix(train_on_one_test_on_another_performance, col_name, start
         cmap = LinearSegmentedColormap.from_list("yb", colors)
     # accuracy
     print("\\begin{tikzpicture}[]")
-    print("  \\matrix[matrix of nodes,row sep=-\\pgflinewidth, column sep=-.1em,")
+    print("  \\matrix[matrix of nodes,row sep=-\\pgflinewidth, column sep=-.39em,")
     print("nodes={{rectangle}},")
     print("column 1/.style={{anchor=east}},]{")
-    _df = pd.pivot_table(train_on_one_test_on_another_performance, values=col_name, index='train_on', columns='test_on').round(2)
-    for i,r in _df.round(2).iterrows():
-        s = "\\data{\\small{" + process_tick_label(i).replace('_','\\_')  + '}} & '
-        for e in list(r):
-            s += "|[fill={{rgb,255:red,{};green,{};blue,{}}}, value={}]|&".format(int(255*cmap(e)[0]), int(255*cmap(e)[1]), int(255*cmap(e)[2]), (e))
-        print(s[:-1],'\\\\')
+    train_on_one_test_on_another_performance['train_on2'] = train_on_one_test_on_another_performance['train_on'].map(lambda x: x[:-8] if 'one_hot' in x else x)
+    train_on_one_test_on_another_performance['test_on2'] = train_on_one_test_on_another_performance['test_on'].map(lambda x: x[:-8] if 'one_hot' in x else x)
+    train_on_one_test_on_another_performance['train_on_year'] = train_on_one_test_on_another_performance['train_on2'].str[-4:]
+    train_on_one_test_on_another_performance['test_on_year'] = train_on_one_test_on_another_performance['test_on2'].str[-4:]
+
+    train_on_one_test_on_another_performance = train_on_one_test_on_another_performance.sort_values(by=['train_on_year', 'train_on2', 'test_on_year', 'test_on2'], ascending=[False, True, False, True])
+
+    #_df = pd.pivot_table(train_on_one_test_on_another_performance, values=col_name, index='train_on', columns='test_on').round(2)
+    labels = []
+    cur_train_on = ''
+    first_row = True
+    for row in train_on_one_test_on_another_performance.to_dict(orient='records'):
+        i = row['train_on']
+        if cur_train_on != i:
+            labels.append(i)
+            cur_train_on = i
+            if not first_row:
+                print(s[:-1],'\\\\')
+            first_row = False
+            s = "\\data{\\small{" + process_tick_label(i).replace('_','\\_')  + '}} & '
+        e = round(row[col_name], 2)
+        s += "|[fill={{rgb,255:red,{};green,{};blue,{}}}, value={}]|&".format(int(255*cmap(e)[0]), int(255*cmap(e)[1]), int(255*cmap(e)[2]), (e))
+    print(s[:-1],'\\\\')
     print("};")
-    for i,e in enumerate(list(_df.index)):
+    for i,e in enumerate(labels):
         t_lab = process_tick_label(e)
-        print("\\node[label={[label distance=0.5cm,text depth=-1ex,rotate=45]left:", data(command(t_lab, 'small')), "}] at", f"({start_x + (0.7*i)},{start_y})", "{};")
+        print("\\node[label={[label distance=0.5cm,text depth=-1ex,rotate=45]left:", data(command(t_lab, 'small')), "}] at", f"({start_x + (label_offset*i)},{start_y})", "{};")
     print("\\end{tikzpicture}\n\n")
 
 
-def print_intratype_test(intraclass_dict):
-    for name, v in intraclass_dict.items():
-        print_row([data(name), f'{v["a"]:.2f}/{v["ba"]:.2f}', f'{v["n_datasets"]}'])
+def print_intratype_test(intraclass_df, max_depth=4):
+    for name, row in intraclass_df.to_dict(orient='index').items():
+        accuracies = [row[f'a{i}'] for i in range(1, max_depth+1)]
+        balanced_accuracies = [row[f'ba{i}'] for i in range(1, max_depth+1)]
+        accuracy_sdt = max(accuracies)
+        # prefer shallower decision trees if accuracy isn't too different
+        max_ind, accuracy_sdt, _, balanced_accuracy_sdt = get_shallowest_good_results(0.025, accuracies, [-1]*len(accuracies), balanced_accuracies)
+        print_row([data(name), f'{accuracy_sdt:.2f}/{balanced_accuracy_sdt:.2f}', f'{max_ind + 1}', f'{row["n_datasets"]}'])
 
 

@@ -51,12 +51,14 @@ def load_twibot(path, drop_extra_cols=[]):
             twibot_df[col] = twibot_df[col].astype(bool).astype(int) 
     drop_cols = COLUMNS_TO_DROP + ['profile_location', 'entities', 'id_str'] + drop_extra_cols
     twibot_one_hot = drop_and_one_hot(twibot_df, drop_cols, [ent for ent in DUMMY_COLUMNS + ['is_translator', 'contributors_enabled'] if ent not in drop_cols])
+    twibot_one_hot = twibot_one_hot.loc[:,~twibot_one_hot.columns.duplicated()].copy()
     return twibot_df, twibot_one_hot, twibot_labels
 
 def load_dataset(data_path, labels_path):
     """ Load any dataset that comes from bot repo in standard form. """
     profs = extract_users(data_path)
     df, one_hot, labels = preprocess_users(profs, labels_path)
+    one_hot = one_hot.loc[:,~one_hot.columns.duplicated()].copy()
     return df, one_hot, labels 
 
 
@@ -83,6 +85,7 @@ def load_cresci(data_template, folder_names, is_bot, cols_to_drop, dummy_cols, i
 
     # Preprocess
     cresci_one_hot = drop_and_one_hot(cresci, cols_to_drop, dummy_cols)
+    cresci_one_hot = cresci_one_hot.loc[:,~cresci_one_hot.columns.duplicated()].copy()
     return cresci, cresci_one_hot, cresci_labels
 
 def load_cresci2017(data_template):
@@ -175,17 +178,20 @@ def load_midterm(data_path, labels_path):
     cols_to_drop = ['probe_timestamp', 'screen_name', 'name', 'description', 'url']
     dummy_cols = ['lang', 'protected', 'verified', 'geo_enabled', 'profile_use_background_image', 'default_profile', 'index']
     df, one_hot, labels = preprocess_users(profs, labels_path, 'user_id', 'user_created_at', "%a %b %d %H:%M:%S %Y", cols_to_drop, dummy_cols)
+    one_hot = one_hot.loc[:,~one_hot.columns.duplicated()].copy()
     return df, one_hot, labels
 
 def load_caverlee(data_path, drop_created_at=False):
     """ Load caverlee-2011 dataset. Since all data is numeric, no one-hot columns. """
-    caverlee2011_bots = pd.read_csv(data_path + "content_polluters.txt", sep="\t", header=None, names=["UserID", "CreatedAt", "CollectedAt", "NumerOfFollowings", "NumberOfFollowers", "NumberOfTweets", "LengthOfScreenName", "LengthOfDescriptionInUserProfile"])
-    caverlee2011_humans = pd.read_csv(data_path + "legitimate_users.txt", sep="\t", header=None, names=["UserID", "CreatedAt", "CollectedAt", "NumerOfFollowings", "NumberOfFollowers", "NumberOfTweets", "LengthOfScreenName", "LengthOfDescriptionInUserProfile"])
+    col_names = ["user_id", "created_at", "collected_at", "friends_count", "followers_count", "statuses_count", "LengthOfScreenName", "LengthOfDescriptionInUserProfile"]
+    caverlee2011_bots = pd.read_csv(data_path + "content_polluters.txt", sep="\t", header=None, names=col_names)
+    caverlee2011_humans = pd.read_csv(data_path + "legitimate_users.txt", sep="\t", header=None, names=col_names)
     caverlee2011 = pd.concat([caverlee2011_bots, caverlee2011_humans])
-    caverlee2011["CreatedAt"] = caverlee2011["CreatedAt"].apply(lambda dt: datetime.strptime(dt, "%Y-%m-%d %H:%M:%S").timestamp())
-    caverlee2011.drop(columns=["CollectedAt", "UserID"], inplace=True)
+    caverlee2011.drop(columns=["collected_at", "user_id"], inplace=True)
     if drop_created_at:
-        caverlee2011.drop(columns=["CreatedAt"], inplace=True)
+        caverlee2011.drop(columns=["created_at"], inplace=True)
+    else:
+        caverlee2011["created_at"] = caverlee2011["created_at"].apply(lambda dt: datetime.strptime(dt, "%Y-%m-%d %H:%M:%S").timestamp())
     caverlee2011_labels = pd.Series([1]*len(caverlee2011_bots) + [0]*len(caverlee2011_humans))
     return caverlee2011, caverlee2011_labels
 
@@ -366,8 +372,6 @@ def load_human_dataset_list():
     cresci_stock, cresci_stock_2018_one_hot, cresci_stock_labels = load_dataset(PROJ_PATH + "/data/cresci-stock-2018_tweets.json", PROJ_PATH + "/data/cresci-stock-2018.tsv")
     midterm, midterm_2018_one_hot, midterm_labels = load_midterm(PROJ_PATH + "/data/midterm-2018/midterm-2018_processed_user_objects.json", PROJ_PATH + "/data/midterm-2018/midterm-2018.tsv")
 
-
-    caverlee_2011.set_axis(['created_at', 'friends_count', 'followers_count', 'statuses_count', 'LengthfScreenName', 'LengthOfDescriptionInUserProfile'], inplace=True, axis=1)
     caverlee2011_humans = caverlee_2011[caverlee_2011_labels.values == 0]
     botometer_feedback_2019_one_hot_humans = botometer_feedback_2019_one_hot[bf_labels.values == 0]
     gilani_2017_one_hot_humans = gilani_2017_one_hot[gilani_labels.values == 0]
@@ -379,13 +383,15 @@ def load_human_dataset_list():
             botometer_feedback_2019_one_hot_humans, 
             caverlee2011_humans,
             gilani_2017_one_hot_humans,
-            cresci_stock_2018_one_hot_humans])
+            cresci_stock_2018_one_hot_humans,
+            midterm_2018_one_hot_humans])
     return [
         caverlee2011_humans[cols], 
         botometer_feedback_2019_one_hot_humans[cols],
         celebrity_one_hot[cols],
         gilani_2017_one_hot_humans[cols],
-        cresci_stock_2018_one_hot_humans[cols]
+        cresci_stock_2018_one_hot_humans[cols],
+        midterm_2018_one_hot_humans[cols]
     ]
 
 
@@ -475,52 +481,45 @@ def load_fake_followers(intradataset=False, balance=False):
 
 def load_other_bots(intradataset=False, balance=False):
     """ Load other-type bots. """
-    n_datasets = 4
+    n_datasets = 3
     bf, botometer_feedback_2019_one_hot, bf_labels = load_dataset(PROJ_PATH + "/data/botometer-feedback-2019_tweets.json", PROJ_PATH + "/data/botometer-feedback-2019.tsv")
     gilani, gilani_2017_one_hot, gilani_labels = load_dataset(PROJ_PATH + "/data/gilani-2017_tweets.json", PROJ_PATH + "/data/gilani-2017.tsv")
     rtbust, cresci_rtbust_2019_one_hot, rtbust_labels = load_dataset(PROJ_PATH + "/data/cresci-rtbust-2019_tweets.json", PROJ_PATH + "/data/cresci-rtbust-2019.tsv")
-    cresci_stock, cresci_stock_2018_one_hot, cresci_stock_labels = load_dataset(PROJ_PATH + "/data/cresci-stock-2018_tweets.json", PROJ_PATH + "/data/cresci-stock-2018.tsv")
-    midterm, midterm_2018_one_hot, midterm_labels = load_midterm(PROJ_PATH + "/data/midterm-2018/midterm-2018_processed_user_objects.json", PROJ_PATH + "/data/midterm-2018/midterm-2018.tsv")
 
 
     botometer_feedback_2019_one_hot_bot = botometer_feedback_2019_one_hot[bf_labels.values == 1]
     gilani_2017_one_hot_bot = gilani_2017_one_hot[gilani_labels.values == 1]
     cresci_rtbust_2019_one_hot_bot = cresci_rtbust_2019_one_hot[rtbust_labels.values == 1]
-    cresci_stock_2018_one_hot_bot = cresci_stock_2018_one_hot[cresci_stock_labels.values == 1]
-    midterm_2018_one_hot_bot = midterm_2018_one_hot[midterm_labels.values == 1]
 
     cols = get_shared_cols([
         botometer_feedback_2019_one_hot_bot,
         gilani_2017_one_hot_bot,
         cresci_rtbust_2019_one_hot_bot,
-        cresci_stock_2018_one_hot_bot
     ])
     if balance:
-        n_accts = min(len(botometer_feedback_2019_one_hot_bot), len(gilani_2017_one_hot_bot), len(cresci_rtbust_2019_one_hot_bot), len(cresci_stock_2018_one_hot_bot))
+        n_accts = min(len(botometer_feedback_2019_one_hot_bot), len(gilani_2017_one_hot_bot), len(cresci_rtbust_2019_one_hot_bot))
 
         other_bots = pd.concat([botometer_feedback_2019_one_hot_bot[cols].sample(n_accts), 
                                 gilani_2017_one_hot_bot[cols].sample(n_accts), 
-                                cresci_rtbust_2019_one_hot_bot[cols].sample(n_accts), 
-                                cresci_stock_2018_one_hot_bot[cols].sample(n_accts)])
+                                cresci_rtbust_2019_one_hot_bot[cols].sample(n_accts)])
 
-        other_bots_labels = [0]*n_accts + [1]*n_accts + [2]*n_accts + [3]*n_accts
+        other_bots_labels = pd.Series([0]*n_accts + [1]*n_accts + [2]*n_accts)
         return other_bots, other_bots_labels, n_datasets
 
     other_bots = pd.concat([botometer_feedback_2019_one_hot_bot[cols], 
                             gilani_2017_one_hot_bot[cols], 
-                            cresci_rtbust_2019_one_hot_bot[cols], 
-                            cresci_stock_2018_one_hot_bot[cols]])
+                            cresci_rtbust_2019_one_hot_bot[cols]])
     if balance:
-        n_accts = min(len(botometer_feedback_2019_one_hot_bot), len(gilani_2017_one_hot_bot), len(cresci_rtbust_2019_one_hot_bot), len(cresci_stock_2018_one_hot_bot))
+        n_accts = min(len(botometer_feedback_2019_one_hot_bot), len(gilani_2017_one_hot_bot), len(cresci_rtbust_2019_one_hot_bot))
 
         other_bots = pd.concat([botometer_feedback_2019_one_hot_bot[cols].sample(n_accts), 
                                 gilani_2017_one_hot_bot[cols].sample(n_accts), 
-                                cresci_rtbust_2019_one_hot_bot[cols].sample(n_accts), 
-                                cresci_stock_2018_one_hot_bot[cols].sample(n_accts)])
+                                cresci_rtbust_2019_one_hot_bot[cols].sample(n_accts)])
         other_bots_labels = [0]*n_accts + [1]*n_accts + [2]*n_accts + [3]*n_accts
         return other_bots, other_bots_labels, n_datasets
     if intradataset:
-        other_bots_labels = [0]*len(botometer_feedback_2019_one_hot_bot) + [1]*len(gilani_2017_one_hot_bot) + [2]*len(cresci_rtbust_2019_one_hot_bot) + [3]*len(cresci_stock_2018_one_hot_bot)
+        other_bots_labels = [0]*len(botometer_feedback_2019_one_hot_bot) + [1]*len(gilani_2017_one_hot_bot) + [2]*len(cresci_rtbust_2019_one_hot_bot) 
         return other_bots, other_bots_labels, n_datasets
 
     return other_bots
+
