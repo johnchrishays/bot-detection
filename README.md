@@ -2,7 +2,7 @@
 
 ## Overview
 
-This repository contains code and data produced for the analysis we carried out for ``Simplistic Collection and Labeling Practices Limit the Utility of Benchmark Datasets for Twitter Bot Detection''
+This repository contains code and data produced for the analysis we carried out for ``Simplistic Collection and Labeling Practices Limit the Utility of Benchmark Datasets for Twitter Bot Detection''. It is necessary to download the datasets described in the paper to replicate the analysis.
 
 ## Directory overview
 
@@ -27,6 +27,8 @@ Install needed packages:
 ```
 python3 -m pip install -r requirements.txt
 ```
+
+Some of the data used in this paper is available in the [OSoMe Bot Repository](https://botometer.osome.iu.edu/bot-repository/). For other datasets, it will be necessary to contact the authors of the dataset's originating paper.
 
 ## Run Analysis
 
