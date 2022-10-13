@@ -34,7 +34,7 @@ Run jupyter notebook:
 ```
 jupyter notebook
 ```
-and select `Simplistic Collection and Labeling Practices Limit the Generalizability of Benchmark Datasets for Twitter Bot Detection.ipynb' for analysis or `gen_tables.ipynb' to generate the tables in the analysis.
+and select `Simplistic Collection and Labeling Practices Limit the Generalizability of Benchmark Datasets for Twitter Bot Detection.ipynb` for analysis or `gen_tables.ipynb` to generate the tables in the analysis.
 
 
 
